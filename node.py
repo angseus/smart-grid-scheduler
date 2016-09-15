@@ -1,5 +1,6 @@
 # Should include
 #	- Simulating data for a specific node
+# 	- Node = {id, power, time, flexible, category, priority, group id}
 
 # Should have the following variables:
 # ID/Name
