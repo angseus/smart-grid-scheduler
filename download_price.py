@@ -26,4 +26,4 @@ def downloadPrice(excel_file):
     
 if __name__ == "__main__":
     # This should not be used
-    downloadPrice("Elspot prices.xls")
+    downloadPrice("elspot_prices.xls")
