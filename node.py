@@ -14,20 +14,18 @@
 # Priority - How important it is compared to other products
 # Group ID (Fas) - Feature to be able to restrict total consumption at the same phase
 
-
 import socket
 import sys
 import json
+import time
 
-    
+HOST, PORT = "localhost", 9999
 
 class Node():
 	def __init__(self, id, power, time, flexible, category, priority, group_id):
 		# Connect to the Smart Meter
-		HOST, PORT = "localhost", 9999
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect((HOST, PORT))
-
 		self.id = id
 		self.power = power
 		self.time = time
@@ -36,14 +34,33 @@ class Node():
 		self.priority = priority
 		self.group_id = group_id
 
-		register_data = {"id":self.id, "power":self.power, "time":self.time, "flexible":self.flexible,
-			"category":self.category, "priority":self.priority, "group_id":self.group_id}
+		self.data = {"id":self.id, "details":{"power":power, "time":time, "flexible":flexible,
+			"category":category, "priority":priority, "group_id":group_id}}
 
-		data = {"action": "register", "payload":register_data}
-		# Convert to JSON and send
-		data = json.dumps(data).encode('utf-8')
-		self.sock.sendall(data)
+		payload = {"action": "register", "payload":self.data}
 
+		self.send(payload)
+		
+	def update(self):
+		payload = {"action":"update", "payload":self.data}
+		self.send(payload)
+
+	def request(self):
+		pass
+
+	def change_load(self, power):
+		self.power = power
+		self.data["details"]["power"] = power
+		self.update()
+
+	def send(self, payload):
+		payload = json.dumps(payload).encode('utf-8')
+		print (payload)
+		self.sock.sendall(payload)
 
 if __name__ == "__main__":
-	node = Node(0, 400, 0, 0, 0, 0, 1)
+	node0 = Node(0, 400, 0, 0, 0, 0, 1) # interactive load
+	node1 = Node(1, 600, 0, 0, 0, 0, 1) # interactive load
+	node0.change_load(10000)			# change the load
+	node2 = Node(2, 800, 0, 0, 0, 0, 1) # interactive load
+	
