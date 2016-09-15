@@ -49,9 +49,11 @@ class RequestHandler(socketserver.BaseRequestHandler):
             elif (action == 'request'):
                 self.handle_request(payload)
 
+            # Update action
             elif (action == 'update'):
                 self.handle_update(payload)
 
+            # Disconnect action
             elif (action == 'disconnect'):
                 self.handle_disconnect(payload)
 
