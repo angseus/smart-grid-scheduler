@@ -46,12 +46,17 @@ class Node():
 		self.send(payload)
 
 	def request(self):
-		pass
+		payload = {"action":"request", "payload":{"id":self.id}}
+		self.send(payload)
 
 	def change_load(self, power):
 		self.power = power
 		self.data["details"]["power"] = power
 		self.update()
+
+	def disconnect(self):
+		payload = {"action":"disconnect", "payload":{"id":self.id}}
+		self.send(payload)
 
 	def send(self, payload):
 		payload = json.dumps(payload).encode('utf-8')
@@ -60,7 +65,9 @@ class Node():
 
 if __name__ == "__main__":
 	node0 = Node(0, 400, 0, 0, 0, 0, 1) # interactive load
-	node1 = Node(1, 600, 0, 0, 0, 0, 1) # interactive load
-	node0.change_load(10000)			# change the load
-	node2 = Node(2, 800, 0, 0, 0, 0, 1) # interactive load
+	#node1 = Node(1, 600, 0, 0, 0, 0, 1) # interactive load
+	#node2 = Node(2, 800, 0, 0, 0, 0, 1) # interactive load
+	node0.request()
+	time.sleep(2)
+	node0.disconnect()
 	
