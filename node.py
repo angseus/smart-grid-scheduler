@@ -24,14 +24,16 @@ import socket
 import sys
 import json
 import time
-import threading
+from threading import Thread
 import time
 
-HOST, PORT = 'localhost', 9999
+HOST, PORT = 'localhost', 9000
 
-class Node(threading.Thread):
+class Node(Thread):
     def __init__(self, id, power, time, flexible, category, priority, group_id, activity):
-        threading.Thread.__init__(self)
+        # Set up threading
+        Thread.__init__(self)
+        self.daemon = True
 
         # Connect to the Smart Meter
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -52,6 +54,9 @@ class Node(threading.Thread):
         payload = {'action': 'register', 'payload':self.data}
 
         self.send(payload)
+
+        # Start the thread
+        self.start()
         
     def update(self):
         payload = {'action':'update', 'payload':self.data}
@@ -79,8 +84,7 @@ class Node(threading.Thread):
             res = self.sock.recv(1024)
         except Exception as e:
             time.sleep(0.001)
-            res = ''
-
+            res = None
         if not res:
             return
         res = res.decode('utf-8')
@@ -126,6 +130,7 @@ class Node(threading.Thread):
         pass
 
     def run(self):
+        print("Node: " + str(self.id) + " is alive")
         index = 0
         current_second = int(time.strftime('%S', time.gmtime()))
         while(True):
@@ -146,6 +151,5 @@ if __name__ == '__main__':
     node0 = Node(0, 400, 0.25, 1, 1, 0, 1, activity0) # TV
     node1 = Node(1, 300, 0.25, 1, 1, 0, 1, activity1) # Computer
     node2 = Node(2, 200, 0.25, 1, 1, 0, 1, activity2) # Derp
-    node0.start()
-    node1.start()
-    node2.start()
+    while True:
+        pass
