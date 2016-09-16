@@ -10,6 +10,7 @@
 
 import socketserver
 import json
+import download_price
 
 node_list = {}
 waiting_list = {}
@@ -17,6 +18,8 @@ active_list = {}
 background_list = {}
 current_power = 0
 threshold = 1500
+# keeps track of the following days hourly electricaly price
+pricelist = {}
 
 class RequestHandler(socketserver.BaseRequestHandler):
     """
@@ -100,12 +103,26 @@ class RequestHandler(socketserver.BaseRequestHandler):
     def handle_update(self, payload):
         print('Update from node: ' + str(payload['id']))
 
+
 class SmartMeter():
     def __init__(self):
+        self.update_price()
+        self.find_chepeast_hour()
         # Server data
         HOST, PORT = 'localhost', 9999
         self.server = socketserver.TCPServer((HOST, PORT), RequestHandler)
         self.server.serve_forever()
+
+    def update_price(self):
+        self.pricelist = download_price.downloadPrice("elspot_prices.xls")
+
+    # Find cheapest hour and return hour and price for that
+    def find_chepeast_hour(self):
+        # Should consider if there are several hours with same lowest price, which one has least schedule?
+        
+        lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
+        # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
+        return lowest_price
 
 if __name__ == '__main__':
     smart_meter = SmartMeter()
