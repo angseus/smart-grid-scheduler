@@ -25,22 +25,22 @@ class RequestHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         while True:
-            self.data = self.request.recv(1024)
-            if not self.data:
+            data = self.request.recv(1024)
+            if not data:
                 return
-            self.data = self.data.decode('utf-8')
+            data = data.decode('utf-8')
             try:
-                self.data = json.loads(self.data)
+                data = json.loads(data)
             except Exception as e:
                 print (e)
-            print (self.data)
+                continue
 
             """
             Depending on the action, perform the proper operation.
             """
-
-            action = self.data["action"]
-            payload = self.data["payload"]
+            print ("DATA HERE: " + str(data))
+            action = data['action']
+            payload = data['payload']
 
             # Register action
             if (action == 'register'):
@@ -62,45 +62,50 @@ class RequestHandler(socketserver.BaseRequestHandler):
             else:
                 print('Invalid action received')
 
+            # Reset
+            action = ''
+            payload = ''
+            data.clear()
+
     def handle_register(self, payload):
         # Add the node to the list of all nodes
-        print("Register from node: " + str(payload["id"]))
-        node_list[payload["id"]] = payload["details"]
+        print('Register from node: ' + str(payload['id']))
+        node_list[payload['id']] = payload['details']
 
         # Check if the node is a background task
-        if (payload["details"]["flexible"] == 1):
-            background_list[payload["id"]] = payload["details"]
+        if (payload['details']['flexible'] == 1):
+            background_list[payload['id']] = payload['details']
 
     def handle_request(self, payload):
-        print("Request from node: " + str(payload["id"]))
+        print('Request from node: ' + str(payload['id']))
         # Check if we have enough power left in order to turn the device on
         if (current_power <= threshold):
-            active_list[payload["id"]] = payload
+            active_list[payload['id']] = payload
             print (active_list)
-            payload = json.dumps({"action":"approved"}).encode('utf-8')
+            payload = json.dumps({'action':'approved'}).encode('utf-8')
             self.request.send(payload)
         
         # Put it in the waiting queue since we don't have priorities yet
         else:
-            waiting_list[payload["id"]] = payload
+            waiting_list[payload['id']] = payload
             print (waiting_list)
 
     def handle_disconnect(self, payload):
-        print("Disconnect from node: " + str(payload["id"]))
-        active_list.pop(payload["id"])
+        print('Disconnect from node: ' + str(payload['id']))
+        active_list.pop(payload['id'])
         print(active_list)
-        payload = json.dumps({"action":"disconnect"}).encode('utf-8')
+        payload = json.dumps({'action':'disconnect'}).encode('utf-8')
         self.request.send(payload)
 
     def handle_update(self, payload):
-        print("Update from node: " + str(payload["id"]))
+        print('Update from node: ' + str(payload['id']))
 
 class SmartMeter():
     def __init__(self):
         # Server data
-        HOST, PORT = "localhost", 9999
+        HOST, PORT = 'localhost', 9999
         self.server = socketserver.TCPServer((HOST, PORT), RequestHandler)
         self.server.serve_forever()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     smart_meter = SmartMeter()

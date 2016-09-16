@@ -27,7 +27,7 @@ import time
 import threading
 import time
 
-HOST, PORT = "localhost", 9999
+HOST, PORT = 'localhost', 9999
 
 class Node(threading.Thread):
     def __init__(self, id, power, time, flexible, category, priority, group_id, activity):
@@ -46,28 +46,28 @@ class Node(threading.Thread):
         self.group_id = group_id
         self.activity = activity
 
-        self.data = {"id":self.id, "details":{"power":power, "time":time, "flexible":flexible,
-            "category":category, "priority":priority, "group_id":group_id}}
+        self.data = {'id':self.id, 'details':{'power':power, 'time':time, 'flexible':flexible,
+            'category':category, 'priority':priority, 'group_id':group_id}}
 
-        payload = {"action": "register", "payload":self.data}
+        payload = {'action': 'register', 'payload':self.data}
 
         self.send(payload)
         
     def update(self):
-        payload = {"action":"update", "payload":self.data}
+        payload = {'action':'update', 'payload':self.data}
         self.send(payload)
 
     def request(self):
-        payload = {"action":"request", "payload":{"id":self.id}}
+        payload = {'action':'request', 'payload':{'id':self.id}}
         self.send(payload)
 
     def change_load(self, power):
         self.power = power
-        self.data["details"]["power"] = power
+        self.data['details']['power'] = power
         self.update()
 
     def disconnect(self):
-        payload = {"action":"disconnect", "payload":{"id":self.id}}
+        payload = {'action':'disconnect', 'payload':{'id':self.id}}
         self.send(payload)
 
     def send(self, payload):
@@ -89,12 +89,21 @@ class Node(threading.Thread):
         except Exception as e:
             print (e)
         
+        # Check if our request was approved
         if (res['action'] == 'approved'):
             self.switch_on() 
+
+        # Check if we should perform our background activity now
+        elif (res['action'] == 'activate'):
+            self.switch_on()
+
+        # Check if we should disconnect
         elif (res['action'] == 'disconnect'):
             self.switch_off()
+        
+        # Invalid
         else:
-            pass
+            raise Exception
 
     def handle_activity(self, action):
         if (action == 1):
@@ -118,26 +127,25 @@ class Node(threading.Thread):
 
     def run(self):
         index = 0
-        current_second = int(time.strftime("%S", time.gmtime()))
+        current_second = int(time.strftime('%S', time.gmtime()))
         while(True):
             self.check_msg()
-            if (current_second != int(time.strftime("%S", time.gmtime()))):
+            if (current_second != int(time.strftime('%S', time.gmtime()))):
                 self.handle_activity(self.activity[index])
                 index += 1
-                current_second = int(time.strftime("%S", time.gmtime()))
+                current_second = int(time.strftime('%S', time.gmtime()))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     # id, power, time, flexible, category, priority, group_id, activity
-
     # Array that tell the node when and how long to request power
-    activity = [0,0,0,0,0,0,1,2,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
-
+    activity0 = [0,0,0,0,0,0,1,2,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
+    activity1 = [0,0,1,0,2,0,0,0,0,1,0,0,2,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
+    activity2 = [1,0,2,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
     # Create the nodes
-    node0 = Node(0, 400, 0.25, 1, 1, 0, 1, activity) # Fridge, background load
-    #node1 = Node(1, 500, 0.5, 1, 0, 0, 1) # Heating, background load
-
+    node0 = Node(0, 400, 0.25, 1, 1, 0, 1, activity0) # TV
+    node1 = Node(1, 300, 0.25, 1, 1, 0, 1, activity1) # Computer
+    node2 = Node(2, 200, 0.25, 1, 1, 0, 1, activity2) # Derp
     node0.start()
-
-    
-    
+    node1.start()
+    node2.start()
