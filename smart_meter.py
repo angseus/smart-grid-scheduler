@@ -77,7 +77,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
         if (current_power <= threshold):
             active_list[payload["id"]] = payload
             print (active_list)
-            payload = json.dumps({"action":"requested"}).encode('utf-8')
+            payload = json.dumps({"action":"approved"}).encode('utf-8')
             self.request.send(payload)
         
         # Put it in the waiting queue since we don't have priorities yet
@@ -89,7 +89,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
         print("Disconnect from node: " + str(payload["id"]))
         active_list.pop(payload["id"])
         print(active_list)
-        payload = json.dumps({"action":"disconnected"}).encode('utf-8')
+        payload = json.dumps({"action":"disconnect"}).encode('utf-8')
         self.request.send(payload)
 
     def handle_update(self, payload):
