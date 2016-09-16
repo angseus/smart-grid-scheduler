@@ -72,21 +72,14 @@ class Node(threading.Thread):
 
 	def send(self, payload):
 		payload = json.dumps(payload).encode('utf-8')
-		print (payload)
 		self.sock.sendall(payload)
 
 	def check_msg(self):
-		print("wait for msg")
 		try:
 			res = self.sock.recv(1024)
 			print (res)
 		except Exception as e:
-			print("No messages, error:  " + str(e))
-
-		'''
-		if (res):
-			# Check if scheduler send abort or connect, and call the functions to handle them. The function should send confirmation msg when done
-		'''
+			time.sleep(0.001)
 
 	def handle_activity(self, action):
 		if (action == 1):
