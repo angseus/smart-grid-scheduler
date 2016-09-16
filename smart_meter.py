@@ -122,20 +122,25 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 if __name__ == "__main__":
-    smart_meter = SmartMeter()
-    # Port 0 means to select an arbitrary unused port
+    # Host info
     HOST, PORT = "localhost", 9000
 
+    smart_meter = SmartMeter()
+
+    # Create the server
     server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
     server.allow_reuse_address = True
 
-    # Start a thread with the server -- that thread will then start one
-    # more thread for each request
+    # Start a server thread to handle incoming connections
     server_thread = threading.Thread(target=server.serve_forever)
-    # Exit the server thread when the main thread terminates
+
+    # Set it as a daemon, so it terminates when the Python program ends
     server_thread.daemon = True
+
+    # Start the server
     server_thread.start()
     print("Server loop running in thread:", server_thread.name)
     
+    # Infinite loop until we crash
     while True:
         pass
