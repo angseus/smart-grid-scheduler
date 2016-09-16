@@ -14,6 +14,7 @@ import json
 node_list = {}
 waiting_list = {}
 active_list = {}
+background_list = {}
 current_power = 0
 threshold = 1500
 
@@ -62,8 +63,13 @@ class RequestHandler(socketserver.BaseRequestHandler):
                 print('Invalid action received')
 
     def handle_register(self, payload):
+        # Add the node to the list of all nodes
         print("Register from node: " + str(payload["id"]))
         node_list[payload["id"]] = payload["details"]
+
+        # Check if the node is a background task
+        if (payload["details"]["flexible"] == 1):
+            background_list[payload["id"]] = payload["details"]
 
     def handle_request(self, payload):
         print("Request from node: " + str(payload["id"]))

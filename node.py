@@ -10,7 +10,13 @@
 # ... 0 means interactive loads since we cannot control them at all
 # ... 1 means background load that need to be run in a certain interval (slack), 
 # ... 2 (extended) means that we have a deadline, but nothing else to consider
-# Category
+# Category - Category of the load
+# ... 0 - Heating
+# ... 1 - Fridge
+# ... 2 - Electronics (TV/Computer etc.)
+# ... 3 - Kitchen
+# ... 4 - Lights
+# ... 5 - Charging
 # Priority - How important it is compared to other products
 # Group ID (Fas) - Feature to be able to restrict total consumption at the same phase
 
@@ -64,10 +70,15 @@ class Node():
 		self.sock.sendall(payload)
 
 if __name__ == "__main__":
-	node0 = Node(0, 400, 0, 0, 0, 0, 1) # interactive load
-	#node1 = Node(1, 600, 0, 0, 0, 0, 1) # interactive load
-	#node2 = Node(2, 800, 0, 0, 0, 0, 1) # interactive load
+	# id, power, time, flexible, category, priority, group_id
+	
+	# Create the nodes
+	node0 = Node(0, 400, 0.25, 1, 1, 0, 1) # Fridge, background load
+	node1 = Node(1, 500, 0.5, 1, 0, 0, 1) # Heating, background load
+
 	node0.request()
-	time.sleep(2)
+	node1.request()
+	time.sleep(5)
 	node0.disconnect()
+	node1.disconnect()
 	
