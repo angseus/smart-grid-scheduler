@@ -11,6 +11,8 @@
 import socketserver
 import json
 import download_price
+import socket
+import threading
 
 node_list = {}
 waiting_list = {}
@@ -21,13 +23,11 @@ threshold = 1500
 # keeps track of the following days hourly electricaly price
 pricelist = {}
 
-class RequestHandler(socketserver.BaseRequestHandler):
-    """
-    The request handler for incoming packages to the server.
-    """
+class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         while True:
+            # Try to receive
             data = self.request.recv(1024)
             if not data:
                 return
@@ -38,10 +38,7 @@ class RequestHandler(socketserver.BaseRequestHandler):
                 print (e)
                 continue
 
-            """
-            Depending on the action, perform the proper operation.
-            """
-            print ("DATA HERE: " + str(data))
+            print (data)
             action = data['action']
             payload = data['payload']
 
@@ -103,15 +100,10 @@ class RequestHandler(socketserver.BaseRequestHandler):
     def handle_update(self, payload):
         print('Update from node: ' + str(payload['id']))
 
-
 class SmartMeter():
     def __init__(self):
         self.update_price()
         self.find_chepeast_hour()
-        # Server data
-        HOST, PORT = 'localhost', 9999
-        self.server = socketserver.TCPServer((HOST, PORT), RequestHandler)
-        self.server.serve_forever()
 
     def update_price(self):
         self.pricelist = download_price.downloadPrice("elspot_prices.xls")
@@ -123,6 +115,27 @@ class SmartMeter():
         lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
         # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
         return lowest_price
+    
 
-if __name__ == '__main__':
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    pass
+
+
+if __name__ == "__main__":
     smart_meter = SmartMeter()
+    # Port 0 means to select an arbitrary unused port
+    HOST, PORT = "localhost", 9000
+
+    server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
+    server.allow_reuse_address = True
+
+    # Start a thread with the server -- that thread will then start one
+    # more thread for each request
+    server_thread = threading.Thread(target=server.serve_forever)
+    # Exit the server thread when the main thread terminates
+    server_thread.daemon = True
+    server_thread.start()
+    print("Server loop running in thread:", server_thread.name)
+    
+    while True:
+        pass
