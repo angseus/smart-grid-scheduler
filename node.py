@@ -24,14 +24,19 @@ import socket
 import sys
 import json
 import time
+import threading
+import time
 
 HOST, PORT = "localhost", 9999
 
-class Node():
-	def __init__(self, id, power, time, flexible, category, priority, group_id):
+class Node(threading.Thread):
+	def __init__(self, id, power, time, flexible, category, priority, group_id, activity):
+		threading.Thread.__init__(self)
+
 		# Connect to the Smart Meter
 		self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.sock.connect((HOST, PORT))
+		self.sock.setblocking(0)
 		self.id = id
 		self.power = power
 		self.time = time
@@ -39,6 +44,7 @@ class Node():
 		self.category = category
 		self.priority = priority
 		self.group_id = group_id
+		self.activity = activity
 
 		self.data = {"id":self.id, "details":{"power":power, "time":time, "flexible":flexible,
 			"category":category, "priority":priority, "group_id":group_id}}
@@ -69,16 +75,51 @@ class Node():
 		print (payload)
 		self.sock.sendall(payload)
 
-if __name__ == "__main__":
-	# id, power, time, flexible, category, priority, group_id
-	
-	# Create the nodes
-	node0 = Node(0, 400, 0.25, 1, 1, 0, 1) # Fridge, background load
-	node1 = Node(1, 500, 0.5, 1, 0, 0, 1) # Heating, background load
+	def check_msg(self):
+		print("wait for msg")
+		try:
+			res = self.sock.recv(1024)
+			print (res)
+		except Exception as e:
+			print("No messages, error:  " + str(e))
 
-	node0.request()
-	node1.request()
-	time.sleep(5)
-	node0.disconnect()
-	node1.disconnect()
+		'''
+		if (res):
+			# Check if scheduler send abort or connect, and call the functions to handle them. The function should send confirmation msg when done
+		'''
+
+	def handle_activity(self, action):
+		if (action == 1):
+			self.request()
+		elif (action == 2):
+			self.disconnect()
+		elif (action == 0):
+			pass
+		else:
+			raise Exception
+
+	def run(self):
+		index = 0
+		current_second = int(time.strftime("%S", time.gmtime()))
+		while(True):
+			self.check_msg()
+			if (current_second != int(time.strftime("%S", time.gmtime()))):
+				self.handle_activity(self.activity[index])
+				index += 1
+				current_second = int(time.strftime("%S", time.gmtime()))
+
+
+if __name__ == "__main__":
+	# id, power, time, flexible, category, priority, group_id, activity
+
+	# Array that tell the node when and how long to request power
+	activity = [0,0,0,0,0,0,1,2,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
+
+	# Create the nodes
+	node0 = Node(0, 400, 0.25, 1, 1, 0, 1, activity) # Fridge, background load
+	#node1 = Node(1, 500, 0.5, 1, 0, 0, 1) # Heating, background load
+
+	node0.start()
+
+	
 	
