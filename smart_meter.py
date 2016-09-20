@@ -13,90 +13,75 @@ import json
 import download_price
 import socket
 import threading
+import time
+import select
 
-node_list = {} # Tuple with all known devices
-waiting_list = {} # Tuple with all waiting background loads
-active_list = {} # Tuple with all active devices
-background_list = {} # Tuple with all known background devices(active and inactive)
-current_power = 0 
-threshold = 200  # maximum allowed power
-pricelist = {} # keeps track of the following days hourly electricaly price
-blocks_per_hour = 6 # Set how many blocks there is per hour
+class SmartMeter():
+    def __init__(self):
+        # Fetch price
+        self.update_price()
+        self.find_chepeast_hour()
 
-class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
+        # Start the server
+        HOST, PORT = "localhost", 9000
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.bind((HOST, PORT))
+        self.server_socket.listen(10)
+        self.sockets = {}
+        print ("Listening on port: " + str(PORT))
 
-    def handle(self):
-        while True:
-            # Try to receive
-            data = self.request.recv(1024)
-            if not data:
-                return
-            data = data.decode('utf-8')
-            try:
-                data = json.loads(data)
-            except Exception as e:
-                print (e)
-                continue
+        # Scheduling variables
+        self.node_list = {} # Tuple with all known devices
+        self.waiting_list = {} # Tuple with all waiting background loads
+        self.active_list = {} # Tuple with all active devices
+        self.background_list = {} # Tuple with all known background devices(active and inactive)
+        self.current_power = 0 
+        self.threshold = 1500  # maximum allowed power
+        self.pricelist = {} # keeps track of the following days hourly electricaly price
+        self.blocks_per_hour = 6 # Set how many blocks there is per hour
 
-            print (data)
-            action = data['action']
-            payload = data['payload']
+    def update_price(self):
+        self.pricelist = download_price.downloadPrice("elspot_prices.xls")
 
-            # Register action
-            if (action == 'register'):
-                self.handle_register(payload)
-
-            # Request action
-            elif (action == 'request'):
-                self.handle_request(payload)
-
-            # Update action
-            elif (action == 'update'):
-                self.handle_update(payload)
-
-            # Disconnect action
-            elif (action == 'disconnect'):
-                self.handle_disconnect(payload)
-
-            # Invalid, drop it 
-            else:
-                print('Invalid action received')
-
-            # Reset
-            action = ''
-            payload = ''
-            data.clear()
+    # Find cheapest hour and return hour and price for that
+    def find_chepeast_hour(self):
+        # Should consider if there are several hours with same lowest price, which one has least schedule?
+        
+        lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
+        # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
+        return lowest_price
 
     def handle_register(self, payload):
-        global background_list
 
         # Add the node to the list of all nodes
         print('Register from node: ' + str(payload['id']))
-        node_list[payload['id']] = payload['details']
+        self.node_list[payload['id']] = payload['details']
+        id = payload['id']
 
         # Check if the node is a background task
         if (payload['details']['flexible'] == 1):
-            background_list[payload['id']] = payload['details']
+            self.background_list[payload['id']] = payload['details']
+
+        return id
 
     def find_highest_slack(self):
-        global background_list, blocks_per_hour
         # Sort by lowest time block left, and if same, sort by lowest power
-        
         if (len(background_list) > 0):
             # slack = 6 means run 6/6 blocks/hour, meaning maximum and no scheduable
-            slack = blocks_per_hour
+            slack = self.blocks_per_hour
             
             # Temporary list that keeps track of nodes with identical values
             tmp_list = {}
 
             # Find minimum time
-            for k, v in background_list.items():
+            for k, v in self.background_list.items():
                 if (v['time'] < slack):
                     slack = v['time']
                     node_id = k
                     tmp_list = {}
                     tmp_list.update({k: v})
-                elif (v['time'] == slack and slack != blocks_per_hour):
+                elif (v['time'] == slack and slack != self.blocks_per_hour):
                     tmp_list.update({k: v})
 
             # Find which node that has lowest power and return it
@@ -117,37 +102,36 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         
         # If no backgroundloads exists, send back a message for that
         else:
-            return 'no backgroundloads'
+            return None
 
 
     def handle_request(self, payload):
-        global current_power, threshold, background_list
-
         print('Request from node: ' + str(payload['id']))
-        
+        id = payload['id']
         # Get the tuple of details based on the requested node's id
-        details = node_list[payload['id']]
+        details = self.node_list[payload['id']]
         
         # Check which flexibility the node has
         # Interactive load
         if (details['flexible'] == 0):
             print('Interactive load')
             # Add the power to the total consumption
-            current_power += details['power']
+            self.current_power += details['power']
             
             # Add device to active list
-            active_list[payload['id']] = payload
+            self.active_list[payload['id']] = payload
 
             # Send approval to the node
             payload = json.dumps({'action':'approved'}).encode('utf-8')
-            self.request.send(payload)
+            
+            self.sockets[id].send(payload)
 
             # If interactive load exceed the limit, turn off background load
-            if current_power > threshold:
-                while (current_power > threshold):
+            if self.current_power > self.threshold:
+                while (self.current_power > self.threshold):
                     # find the background node that should be turned off
                     node_id = self.find_highest_slack()
-                    if (node_id == 'no backgroundloads'):
+                    if (!node_id):
                         print('No background loads available')
                         break
                     
@@ -157,30 +141,35 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                     #self.request.send(payload)
 
                     # Decrease the power
-                    current_power -= node_list[node_id]['power']
-                    del background_list[node_id]
+                    self.current_power -= self.node_list[node_id]['power']
+                    del self.background_list[node_id]
 
         # Background load with time interval
         elif (details['flexible'] == 1):
             print('Background')
-            active_list[payload['id']] = payload
+            self.active_list[payload['id']] = payload
             #background_list[payload['id']] = payload # already insert it in register
 
-            current_power += details['power']
+            self.current_power += details['power']
+
+        # Background load with time interval
+        elif (details['flexible'] == 1):
+            print('Background 1')
+            self.active_list[payload['id']] = payload
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
-            self.request.send(payload)
+            self.sockets[id].send(payload)
 
         # Background load with deadline
         elif (details['flexible'] == 2):
             print('Schedulable')
-            active_list[payload['id']] = payload
+            self.active_list[payload['id']] = payload
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
-            self.request.send(payload)
+            self.sockets[id].send(payload)
 
             # Check if we have enough power left in order to turn the device on
-            if (current_power + details['power'] <= threshold):
+            if (self.current_power + details['power'] <= self.threshold):
                 pass
                 #current_power += details['power']
                 #payload = json.dumps({'action':'approved'}).encode('utf-8')
@@ -196,62 +185,93 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             print('Invalid flexible type')
 
     def handle_disconnect(self, payload):
-        global current_power
-
         print('Disconnect from node: ' + str(payload['id']))
-        active_list.pop(payload['id'])
-        print(active_list)
+        id = payload['id']
 
-        # Decrease the power
-        #current_power -= node_list[payload['id']]['power']
+        self.active_list.pop(id)
+        print(self.active_list)
 
         payload = json.dumps({'action':'disconnect'}).encode('utf-8')
-        self.request.send(payload)
+        self.sockets[id].send(payload)
 
     def handle_update(self, payload):
         print('Update from node: ' + str(payload['id']))
 
-class SmartMeter():
-    def __init__(self):
-        self.update_price()
-        self.find_chepeast_hour()
+    def handle_recv(self, s):
+        try:
+            data = s.recv(1024)
+        except Exception as e:
+            return
 
-    def update_price(self):
-        self.pricelist = download_price.downloadPrice("elspot_prices.xls")
+        if not data:
+            return
+        data = data.decode('utf-8')
+        try:
+            data = json.loads(data)
+        except Exception as e:
+            print (e)
+            return
 
-    # Find cheapest hour and return hour and price for that
-    def find_chepeast_hour(self):
-        # Should consider if there are several hours with same lowest price, which one has least schedule?
-        
-        lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
-        # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
-        return lowest_price
-    
+        return data
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
+    def handle_action(self, data):
+        action = data['action']
+        payload = data['payload']
 
+        # Request action
+        if (action == 'request'):
+            self.handle_request(payload)
+
+        # Update action
+        elif (action == 'update'):
+            self.handle_update(payload)
+
+        # Disconnect action
+        elif (action == 'disconnect'):
+            self.handle_disconnect(payload)
+
+        # Invalid, drop it 
+        else:
+            print('Invalid action received')
+
+    def main(self):
+        while True:
+            # Check if the main socket has connection
+            readable, writable, errored = select.select([self.server_socket], [], [], 0)
+            for s in readable:
+                if s is self.server_socket:
+                    client_socket, address = self.server_socket.accept()
+                    data = client_socket.recv(1024)
+
+                    if not data:
+                        continue
+                    data = data.decode('utf-8')
+                    try:
+                        data = json.loads(data)
+                    except Exception as e:
+                        print (e)
+                        continue
+
+                    # Set it up
+                    # Might need to set up a much higher timeout here as well, AND in node.py sockets
+                    client_socket.setblocking(0)
+
+                    # Fetch the id and add it to the socket list
+                    id = self.handle_register(data['payload'])
+                    self.sockets[id] = client_socket
+
+            # Check if the other sockets have sent something to us
+            for s in self.sockets.values():
+                data = self.handle_recv(s)
+                if data:
+                    self.handle_action(data)
+                else:
+                    continue
+
+            # Sleep for a while! :) 
+            time.sleep(0.001)
 
 if __name__ == "__main__":
     # Host info
-    HOST, PORT = "localhost", 9000
-
     smart_meter = SmartMeter()
-
-    # Create the server
-    server = ThreadedTCPServer((HOST, PORT), ThreadedTCPRequestHandler)
-    server.allow_reuse_address = True
-
-    # Start a server thread to handle incoming connections
-    server_thread = threading.Thread(target=server.serve_forever)
-
-    # Set it as a daemon, so it terminates when the Python program ends
-    server_thread.daemon = True
-
-    # Start the server
-    server_thread.start()
-    print("Server loop running in thread:", server_thread.name)
-    
-    # Infinite loop until we crash
-    while True:
-        pass
+    smart_meter.main()
