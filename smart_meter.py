@@ -82,38 +82,42 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         global background_list, blocks_per_hour
         # Sort by lowest time block left, and if same, sort by lowest power
         
-        # slack = 6 means run 6/6 blocks/hour, meaning maximum and no scheduable
-        slack = blocks_per_hour
-        
-        # Temporary list that keeps track of nodes with identical values
-        tmp_list = {}
-
-        # Find minimum time
-        for k, v in background_list.items():
-            if (v['time'] < slack):
-                slack = v['time']
-                node_id = k
-                tmp_list = {}
-                tmp_list.update({k: v})
-            elif (v['time'] == slack and slack != blocks_per_hour):
-                tmp_list.update({k: v})
-
-        # Find which node that has lowest power and return it
-        if (len(tmp_list) > 1):
-            # Infinite high number to make sure no device has higher power
-            low_pow = 99999
-            # Find minimum power consumption
-            for k, v in tmp_list.items():
-                if (v['power'] < low_pow):
-                    low_pow = v['power']
-
-            for k, v in tmp_list.items():
-                if v['power'] == low_pow:
-                    node_id = k
-                    break
+        if (len(background_list) > 0):
+            # slack = 6 means run 6/6 blocks/hour, meaning maximum and no scheduable
+            slack = blocks_per_hour
             
-        print("Turn off : " + str(node_id))
-        return node_id
+            # Temporary list that keeps track of nodes with identical values
+            tmp_list = {}
+
+            # Find minimum time
+            for k, v in background_list.items():
+                if (v['time'] < slack):
+                    slack = v['time']
+                    node_id = k
+                    tmp_list = {}
+                    tmp_list.update({k: v})
+                elif (v['time'] == slack and slack != blocks_per_hour):
+                    tmp_list.update({k: v})
+
+            # Find which node that has lowest power and return it
+            if (len(tmp_list) > 1):
+                # Infinite high number to make sure no device has higher power
+                low_pow = 99999
+                # Find minimum power consumption
+                for k, v in tmp_list.items():
+                    if (v['power'] < low_pow):
+                        low_pow = v['power']
+
+                for k, v in tmp_list.items():
+                    if v['power'] == low_pow:
+                        node_id = k
+                        break    
+            print("Turn off : " + str(node_id))
+            return node_id
+        
+        # If no backgroundloads exists, send back a message for that
+        else:
+            return 'no backgroundloads'
 
 
     def handle_request(self, payload):
@@ -143,6 +147,10 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 while (current_power > threshold):
                     # find the background node that should be turned off
                     node_id = self.find_highest_slack()
+                    if (node_id == 'no backgroundloads'):
+                        print('No background loads available')
+                        break
+                    
                     print('in smart_meter, turn off node : ' + str(node_id))
                     # Send disconnect msg to the background node
                     #payload = json.dumps({'action':'disconnect'}).encode('utf-8')
