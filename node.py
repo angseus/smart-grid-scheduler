@@ -95,7 +95,6 @@ class Node(Thread):
         
         # Check if our request was approved
         if (res['action'] == 'approved'):
-            print('Turn on power')
             self.switch_on() 
 
         # Check if we should perform our background activity now
@@ -104,7 +103,6 @@ class Node(Thread):
 
         # Check if we should disconnect
         elif (res['action'] == 'disconnect'):
-            print('Turn off power')
             self.switch_off()
         
         # Invalid
@@ -135,6 +133,8 @@ class Node(Thread):
         print("Node: " + str(self.id) + " is alive")
         index = 0
         current_second = int(time.strftime('%S', time.gmtime()))
+
+        # Run as long as the nodes has simulated activities
         while(index < len(self.activity)):
             self.check_msg()
             if (current_second != int(time.strftime('%S', time.gmtime()))):

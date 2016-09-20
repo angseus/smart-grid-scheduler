@@ -19,8 +19,9 @@ waiting_list = {} # Tuple with all waiting background loads
 active_list = {} # Tuple with all active devices
 background_list = {} # Tuple with all known background devices(active and inactive)
 current_power = 0 
-threshold = 1500  # maximum allowed power
+threshold = 200  # maximum allowed power
 pricelist = {} # keeps track of the following days hourly electricaly price
+blocks_per_hour = 6 # Set how many blocks there is per hour
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
@@ -67,6 +68,8 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             data.clear()
 
     def handle_register(self, payload):
+        global background_list
+
         # Add the node to the list of all nodes
         print('Register from node: ' + str(payload['id']))
         node_list[payload['id']] = payload['details']
@@ -75,8 +78,46 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
         if (payload['details']['flexible'] == 1):
             background_list[payload['id']] = payload['details']
 
+    def find_highest_slack(self):
+        global background_list, blocks_per_hour
+        # Sort by lowest time block left, and if same, sort by lowest power
+        
+        # slack = 6 means run 6/6 blocks/hour, meaning maximum and no scheduable
+        slack = blocks_per_hour
+        
+        # Temporary list that keeps track of nodes with identical values
+        tmp_list = {}
+
+        # Find minimum time
+        for k, v in background_list.items():
+            if (v['time'] < slack):
+                slack = v['time']
+                node_id = k
+                tmp_list = {}
+                tmp_list.update({k: v})
+            elif (v['time'] == slack and slack != blocks_per_hour):
+                tmp_list.update({k: v})
+
+        # Find which node that has lowest power and return it
+        if (len(tmp_list) > 1):
+            # Infinite high number to make sure no device has higher power
+            low_pow = 99999
+            # Find minimum power consumption
+            for k, v in tmp_list.items():
+                if (v['power'] < low_pow):
+                    low_pow = v['power']
+
+            for k, v in tmp_list.items():
+                if v['power'] == low_pow:
+                    node_id = k
+                    break
+            
+        print("Turn off : " + str(node_id))
+        return node_id
+
+
     def handle_request(self, payload):
-        global current_power, threshold
+        global current_power, threshold, background_list
 
         print('Request from node: ' + str(payload['id']))
         
@@ -97,23 +138,34 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             payload = json.dumps({'action':'approved'}).encode('utf-8')
             self.request.send(payload)
 
-            # If interactive load exceed the limit, turn of background load
+            # If interactive load exceed the limit, turn off background load
             if current_power > threshold:
-                if (len(background_list) > 0):
-                    pass
-                    # find the background load that should be turned off
+                while (current_power > threshold):
+                    # find the background node that should be turned off
+                    node_id = self.find_highest_slack()
+                    print('in smart_meter, turn off node : ' + str(node_id))
+                    # Send disconnect msg to the background node
+                    #payload = json.dumps({'action':'disconnect'}).encode('utf-8')
+                    #self.request.send(payload)
+
+                    # Decrease the power
+                    current_power -= node_list[node_id]['power']
+                    del background_list[node_id]
 
         # Background load with time interval
         elif (details['flexible'] == 1):
-            print('Background 1')
+            print('Background')
             active_list[payload['id']] = payload
+            #background_list[payload['id']] = payload # already insert it in register
+
+            current_power += details['power']
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
             self.request.send(payload)
 
         # Background load with deadline
         elif (details['flexible'] == 2):
-            print('Background 2')
+            print('Schedulable')
             active_list[payload['id']] = payload
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
@@ -125,7 +177,7 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
                 #current_power += details['power']
                 #payload = json.dumps({'action':'approved'}).encode('utf-8')
                 #self.request.send(payload)
-                
+
             # Put it in the waiting queue since we don't have priorities yet
             else:
                 pass
@@ -136,9 +188,15 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             print('Invalid flexible type')
 
     def handle_disconnect(self, payload):
+        global current_power
+
         print('Disconnect from node: ' + str(payload['id']))
         active_list.pop(payload['id'])
         print(active_list)
+
+        # Decrease the power
+        #current_power -= node_list[payload['id']]['power']
+
         payload = json.dumps({'action':'disconnect'}).encode('utf-8')
         self.request.send(payload)
 
