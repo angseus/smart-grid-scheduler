@@ -14,14 +14,13 @@ import download_price
 import socket
 import threading
 
-node_list = {}
-waiting_list = {}
-active_list = {}
-background_list = {}
-current_power = 0
-threshold = 1500
-# keeps track of the following days hourly electricaly price
-pricelist = {}
+node_list = {} # Tuple with all known devices
+waiting_list = {} # Tuple with all waiting background loads
+active_list = {} # Tuple with all active devices
+background_list = {} # Tuple with all known background devices(active and inactive)
+current_power = 0 
+threshold = 1500  # maximum allowed power
+pricelist = {} # keeps track of the following days hourly electricaly price
 
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
 
@@ -77,18 +76,64 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             background_list[payload['id']] = payload['details']
 
     def handle_request(self, payload):
+        global current_power, threshold
+
         print('Request from node: ' + str(payload['id']))
-        # Check if we have enough power left in order to turn the device on
-        if (current_power <= threshold):
+        
+        # Get the tuple of details based on the requested node's id
+        details = node_list[payload['id']]
+        
+        # Check which flexibility the node has
+        # Interactive load
+        if (details['flexible'] == 0):
+            print('Interactive load')
+            # Add the power to the total consumption
+            current_power += details['power']
+            
+            # Add device to active list
             active_list[payload['id']] = payload
-            print (active_list)
+
+            # Send approval to the node
             payload = json.dumps({'action':'approved'}).encode('utf-8')
             self.request.send(payload)
-        
-        # Put it in the waiting queue since we don't have priorities yet
+
+            # If interactive load exceed the limit, turn of background load
+            if current_power > threshold:
+                if (len(background_list) > 0):
+                    pass
+                    # find the background load that should be turned off
+
+        # Background load with time interval
+        elif (details['flexible'] == 1):
+            print('Background 1')
+            active_list[payload['id']] = payload
+
+            payload = json.dumps({'action':'approved'}).encode('utf-8')
+            self.request.send(payload)
+
+        # Background load with deadline
+        elif (details['flexible'] == 2):
+            print('Background 2')
+            active_list[payload['id']] = payload
+
+            payload = json.dumps({'action':'approved'}).encode('utf-8')
+            self.request.send(payload)
+
+            # Check if we have enough power left in order to turn the device on
+            if (current_power + details['power'] <= threshold):
+                pass
+                #current_power += details['power']
+                #payload = json.dumps({'action':'approved'}).encode('utf-8')
+                #self.request.send(payload)
+                
+            # Put it in the waiting queue since we don't have priorities yet
+            else:
+                pass
+                #waiting_list[payload['id']] = payload
+
+        # Invalid flexible type
         else:
-            waiting_list[payload['id']] = payload
-            print (waiting_list)
+            print('Invalid flexible type')
 
     def handle_disconnect(self, payload):
         print('Disconnect from node: ' + str(payload['id']))

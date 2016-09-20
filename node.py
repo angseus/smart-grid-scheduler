@@ -95,6 +95,7 @@ class Node(Thread):
         
         # Check if our request was approved
         if (res['action'] == 'approved'):
+            print('Turn on power')
             self.switch_on() 
 
         # Check if we should perform our background activity now
@@ -103,6 +104,7 @@ class Node(Thread):
 
         # Check if we should disconnect
         elif (res['action'] == 'disconnect'):
+            print('Turn off power')
             self.switch_off()
         
         # Invalid
