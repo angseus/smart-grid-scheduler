@@ -67,7 +67,7 @@ class SmartMeter():
 
     def find_highest_slack(self):
         # Sort by lowest time block left, and if same, sort by lowest power
-        if (len(background_list) > 0):
+        if (len(self.background_list) > 0):
             # slack = 6 means run 6/6 blocks/hour, meaning maximum and no scheduable
             slack = self.blocks_per_hour
             
@@ -131,7 +131,7 @@ class SmartMeter():
                 while (self.current_power > self.threshold):
                     # find the background node that should be turned off
                     node_id = self.find_highest_slack()
-                    if (!node_id):
+                    if (not node_id):
                         print('No background loads available')
                         break
                     
