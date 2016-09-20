@@ -133,13 +133,13 @@ class Node(Thread):
         print("Node: " + str(self.id) + " is alive")
         index = 0
         current_second = int(time.strftime('%S', time.gmtime()))
-        while(True):
+        while(index < len(self.activity)):
             self.check_msg()
             if (current_second != int(time.strftime('%S', time.gmtime()))):
                 self.handle_activity(self.activity[index])
                 index += 1
                 current_second = int(time.strftime('%S', time.gmtime()))
-
+        print("Node Done")
 
 if __name__ == '__main__':
     # id, power, time, flexible, category, priority, group_id, activity
@@ -148,7 +148,7 @@ if __name__ == '__main__':
     activity1 = [0,0,1,0,2,0,0,0,0,1,0,0,2,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
     activity2 = [1,0,2,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
     # Create the nodes
-    node0 = Node(0, 400, 0.25, 1, 1, 0, 1, activity0) # TV
+    node0 = Node(0, 400, 0.25, 0, 1, 0, 1, activity0) # TV
     node1 = Node(1, 300, 0.25, 1, 1, 0, 1, activity1) # Computer
     node2 = Node(2, 200, 0.25, 1, 1, 0, 1, activity2) # Derp
     while True:
