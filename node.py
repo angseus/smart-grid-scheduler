@@ -92,6 +92,7 @@ class Node(Thread):
             res = json.loads(res)
         except Exception as e:
             print (e)
+            return
         
         # Check if our request was approved
         if (res['action'] == 'approved'):
@@ -157,8 +158,8 @@ if __name__ == '__main__':
     
     # Create the nodes
     node0 = Node(0, 350, 0, 0, 1, 0, 1, activity0) # TV
-    node1 = Node(1, 100, 2, 1, 1, 0, 1, activity1) # Computer
-    node2 = Node(2, 120, 4, 1, 1, 0, 1, activity2) # Derp
+    node1 = Node(1, 120, 4, 1, 1, 0, 1, activity1) # Computer
+    node2 = Node(2, 100, 2, 1, 1, 0, 1, activity2) # Derp
     #node3 = Node(3, 400, 0, 0, 1, 0, 1, activity3) # TV
     #node4 = Node(4, 400, 0, 0, 1, 0, 1, activity4) # TV
     

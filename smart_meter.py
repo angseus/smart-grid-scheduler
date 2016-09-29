@@ -41,7 +41,7 @@ class SmartMeter():
         self.threshold = 350  # maximum allowed power
         self.pricelist = {} # keeps track of the following days hourly electricaly price
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
-        self.time = 0
+        self.clock = 0
 
     def update_price(self):
         self.pricelist = download_price.downloadPrice("elspot_prices.xls")
@@ -57,7 +57,7 @@ class SmartMeter():
 
         # Add the node to the list of all nodes
         print('Register from node: ' + str(payload['id']))
-        self.node_list[payload['id']] = payload['details']
+        self.node_list[payload['id']] = payload['details'].copy()
         id = payload['id']
 
         # Check if the node is a background task
@@ -66,7 +66,7 @@ class SmartMeter():
             self.background_load[payload['id']] = payload['details']
 
             # This should be removed when the scheduler start background loads
-            self.active_list[id] = payload['details']
+            self.active_list[id] = {'id': id}
             
             # remove this one when the scheduler is implemented
             self.current_power += payload['details']['power']
@@ -75,7 +75,7 @@ class SmartMeter():
 
     # Helpfunction that help finding the best backgroundload to pause, 
     # with shortest time left, since it is easier to schedule later
-    def find_highest_slack(self, temp_list):
+    def find_least_slack(self, temp_list):
         # Sort by lowest time block left, and if same, sort by lowest power
         if (len(temp_list) > 0):
             # slack = 6 means run 6/6 blocks/hour, meaning maximum and no scheduable
@@ -111,7 +111,7 @@ class SmartMeter():
             else:
                 val = tmp_list[node_id]
 
-            print(str(node_id) + " has the highest slack")
+            #print(str(node_id) + " has the highest slack")
             return node_id, val
         
         # If no backgroundloads exists, send back a message for that
@@ -134,19 +134,21 @@ class SmartMeter():
             self.current_power += details['power']
             
             # Add device to active list
-            self.active_list[payload['id']] = payload
+            self.active_list[payload['id']] = {'id': payload['id']}
 
             # Send approval to the node
             payload = json.dumps({'action':'approved'}).encode('utf-8')
             
             self.sockets[id].send(payload)
 
+            # TODO, check so we don't disconnect any emergency load that has to run
+
             # If interactive load exceed the limit, turn off background load
             if self.current_power > self.threshold:
                 # Until we have a current power below threshold, continue
                 while (self.current_power > self.threshold):
                     # find the background node that should be turned off
-                    node_id, node_details = self.find_highest_slack(self.background_load)
+                    node_id, node_details = self.find_least_slack(self.background_load)
                     # Check that there arent any background loads to disconnect
                     if (not node_id):
                         print('No background loads available')
@@ -169,7 +171,7 @@ class SmartMeter():
         # Background load with time interval
         elif (details['flexible'] == 1):
             print('Background')
-            self.active_list[payload['id']] = payload
+            self.active_list[payload['id']] = {'id' : payload['id']}
             self.background_load[payload['id']] = payload
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
@@ -180,7 +182,7 @@ class SmartMeter():
         # Background load with deadline
         elif (details['flexible'] == 2):
             print('Schedulable')
-            self.active_list[payload['id']] = payload
+            self.active_list[payload['id']] = {'id' : payload['id']}
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
             self.sockets[id].send(payload)
@@ -206,8 +208,6 @@ class SmartMeter():
         id = payload['id']
 
         self.active_list.pop(id)
-        print("active list:")
-        print(self.active_list)
 
         payload = json.dumps({'action':'disconnect'}).encode('utf-8')
         self.sockets[id].send(payload)
@@ -259,7 +259,6 @@ class SmartMeter():
         disc_list = []
 
         if (self.background_load):
-            print("Decrease time with 1")
             for k, v in self.background_load.items():
                 v['time'] = v['time'] - 1
                 
@@ -280,22 +279,49 @@ class SmartMeter():
             for k in disc_list:
                 self.background_load.pop(k)
 
-    def schedule(self):
+    def schedule(self, clock):
+        disc_list = []
+
+        # Check if there are any loads that have to be turned on this round
         if (self.waiting_list):
-            if (self.current_power < self.threshold):
+            time_left = self.blocks_per_hour - clock
+            for k, v in self.waiting_list.items():
+                if (v['time'] == time_left):
+                    print("Turn on emergency background for node: " + str(k))
+                    # Send activate msg to the background node
+                    payload = json.dumps({'action':'approved'}).encode('utf-8')
+                    self.sockets[k].send(payload)
+                    
+                    # Update current power
+                    self.current_power += v['power']
+
+                    # Add it to the active list and remove it from waiting list
+                    self.active_list[k] = {'id': k}                   
+
+                    # Add it to background loads to be able to see active backgrounds
+                    self.background_load[k] = v
+
+                    # add id:s to a temporary list since you can't change size of the list you iterate over
+                    disc_list.append(k)
+            
+            # Remove all loads that are started 
+            for k in disc_list:
+                self.waiting_list.pop(k)
+
+            while ((self.current_power < self.threshold) and self.waiting_list):
                 # find the background node that should be turned off
-                node_id, node_details = self.find_highest_slack(self.waiting_list)
+                node_id, node_details = self.find_least_slack(self.waiting_list)
                 print("Should turn on " + str(node_id))
                 
                 # Send activate msg to the background node
-                payload = json.dumps({'action':'activate'}).encode('utf-8')
+                payload = json.dumps({'action':'approved'}).encode('utf-8')
                 self.sockets[node_id].send(payload)
                 
                 # Update current power
                 self.current_power += node_details['power']
 
                 # Add it to the active list and remove it from waiting list
-                self.active_list[node_id] = node_details 
+                self.active_list[node_id] = {'id': node_id}
                 self.waiting_list.pop(node_id)
 
                 # Add it to background loads to be able to see active backgrounds
@@ -304,23 +330,19 @@ class SmartMeter():
                 print("Uses to much power to enable background")
     
     def reset_backgrounds(self):
-        print("inside")
+
+        # Loop through all background devices and reset the time
         for k,v in self.background_list.items():
-            details = self.node_list[k]
-            v['time'] = details['time']
+            v['time'] = self.node_list[k]['time']
             self.background_list.update({k: v})
-            print("new time is :" + str(details['time']))
 
         # If we miss someone, should throw error or empty the list
         if ((len(self.waiting_list) != 0) or (len(self.background_load) != 0)):
-            print("Still background loads to be scheduled")
+            print("Opps! Missed to schedule some background loads")
         else:
             # Add all reset items to the list again
-            for k,v in self.background_list.items():
+            for k, v in self.background_list.items():
                 self.waiting_list[k] = v
-
-        print("New list:")
-        print(self.waiting_list)
 
     def main(self):
         while True:
@@ -331,16 +353,20 @@ class SmartMeter():
                 #self.schedule()
                 current_second = int(time.strftime('%S', time.gmtime()))
             '''
+            print("======== New block ========")
+            print("Current power: " + str(self.current_power))
+            print("Active list: " + str(self.active_list))
+            print("Background load: " + str(self.background_load))
+            print("Waiting list: " + str(self.waiting_list))
 
             self.current_second = int(time.strftime('%S', time.gmtime()))
 
             # The scheduler
-            self.schedule()
+            self.schedule(self.clock)
 
             # Function that decrease the time for all background loads, type 1
-            self.decrease_time()            
+            self.decrease_time()
 
-            print("Power: " + str(self.current_power))
             # Check if the main socket has connection
             readable, writable, errored = select.select([self.server_socket], [], [], 0)
             for s in readable:
@@ -379,17 +405,17 @@ class SmartMeter():
                 #sleep
             
             # Increase time
-            self.time += 1
-            self.time = self.time % self.blocks_per_hour
+            self.clock += 1
+            self.clock = self.clock % self.blocks_per_hour
 
-            if(self.time == 0):
+            if(self.clock == 0):
                 print("================== NEW HOUR =================")
                 pass
                 # TODO: reset function that enables every 6th second
                 self.reset_backgrounds()
 
             # Sleep for a while! Should not be necessary later when time is working
-            time.sleep(1.5)
+            time.sleep(0.6)
 
 if __name__ == "__main__":
     # Host info
