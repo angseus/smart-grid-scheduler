@@ -18,9 +18,9 @@ import select
 
 class SmartMeter():
     def __init__(self):
-        # Fetch electricity price
-        self.update_price()
-        self.find_chepeast_hour()
+        # Fetch electricity price for the following 24 hours
+        self.pricelist = self.update_price()
+        self.next_pricelist = self.update_price() # This should be different from the first one
 
         # Start the server
         HOST, PORT = "localhost", 9000
@@ -32,46 +32,78 @@ class SmartMeter():
         print ("Listening on port: " + str(PORT))
 
         # Scheduling variables
-        self.node_list = {} # Tuple with all known devices
-        self.waiting_list = {} # Tuple with all waiting background loads
-        self.active_list = {} # Tuple with all active devices
-        self.background_list = {} # Tuple with all known background devices(active and inactive)
-        self.background_load = {} # Tuple with all active background devices
+        self.node_list = {} # Dict with all known devices
+        self.waiting_list = {} # Dict with all waiting background loads
+        self.active_list = {} # Dict with all active devices
+        self.background_list = {} # Dict with all known background devices(active and inactive)
+        self.background_load = {} # Dict with all active background devices
         self.current_power = 0 
         self.threshold = 350  # maximum allowed power
-        self.pricelist = {} # keeps track of the following days hourly electricaly price
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.clock = 0
-
+        self.block_schedule = [] # length of all blocks for next day, keep track of scheduled power consumption every block
+        self.current_hour = 0 # Keeps track of the current hour of the day
+    
     def update_price(self):
-        self.pricelist = download_price.downloadPrice("elspot_prices.xls")
+        return download_price.downloadPrice("elspot_prices.xls")
+
+    # TODO: Should maybe have an input with number of blocks that's needed and be returned the number to the blocks of the cheapest ones
     # Find cheapest hour and return hour and price for that
     # Should consider if there are several hours with same lowest price, which one has least schedule?
-    def find_chepeast_hour(self):
+    def find_cheapest_hour(self):
         
         lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
         # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
         return lowest_price
 
+    # Find most expensive hour and return hour and price for that
+    # Should be used to calculate the high price if not schedule
+    # Should consider if there are several hours with same highest price
+    def find_highest_hour(self):
+        
+        highest_price = (max(self.pricelist.items(), key=lambda x: x[1]))
+        return highest_price
+    
     def handle_register(self, payload):
 
         # Add the node to the list of all nodes
         print('Register from node: ' + str(payload['id']))
         self.node_list[payload['id']] = payload['details'].copy()
         id = payload['id']
-
+        
         # Check if the node is a background task
         if (payload['details']['flexible'] == 1):
             self.background_list[payload['id']] = payload['details']
-            self.background_load[payload['id']] = payload['details']
+            self.waiting_list[payload['id']] = payload['details']
+
+        elif (payload['details']['flexible'] == 2):
+            
+            deadline = payload['details']['deadline']
+            duration = payload['details']['time']
+
+            #schedule_
 
             # This should be removed when the scheduler start background loads
             self.active_list[id] = {'id': id}
             
-            # remove this one when the scheduler is implemented
+            # Remove this one when the scheduler is implemented
             self.current_power += payload['details']['power']
 
         return id
+
+    def calculate_price(self, start_hour, duration, power):
+        # Should return the price if we should have started the task instead of scheduled
+        price = 0
+        for i in range(start_hour, (start_hour+duration)):
+            i = i % 24
+            price += (self.pricelist[i] * (power/1000))
+        print(price)
+        return price
+
+    # Called every hour to update last hours price with the following days price
+    def update_pricelist(self, current_hour):
+        # Update the price for the last hour with the price for that hour next day
+        self.pricelist[current_hour-1] = self.next_pricelist[current_hour-1]
 
     # Helpfunction that help finding the best backgroundload to pause, 
     # with shortest time left, since it is easier to schedule later
@@ -117,7 +149,6 @@ class SmartMeter():
         # If no backgroundloads exists, send back a message for that
         else:
             return None, None
-
 
     def handle_request(self, payload):
         print('Request from node: ' + str(payload['id']))
@@ -182,6 +213,9 @@ class SmartMeter():
         # Background load with deadline
         elif (details['flexible'] == 2):
             print('Schedulable')
+
+            # Schedule the task here
+
             self.active_list[payload['id']] = {'id' : payload['id']}
 
             payload = json.dumps({'action':'approved'}).encode('utf-8')
@@ -279,7 +313,7 @@ class SmartMeter():
             for k in disc_list:
                 self.background_load.pop(k)
 
-    def schedule(self, clock):
+    def schedule_background(self, clock):
         disc_list = []
 
         # Check if there are any loads that have to be turned on this round
@@ -332,17 +366,27 @@ class SmartMeter():
     def reset_backgrounds(self):
 
         # Loop through all background devices and reset the time
-        for k,v in self.background_list.items():
+        for k, v in self.background_list.items():
             v['time'] = self.node_list[k]['time']
             self.background_list.update({k: v})
 
         # If we miss someone, should throw error or empty the list
         if ((len(self.waiting_list) != 0) or (len(self.background_load) != 0)):
-            print("Opps! Missed to schedule some background loads")
-        else:
-            # Add all reset items to the list again
+            # Remove all background loads from active list
             for k, v in self.background_list.items():
-                self.waiting_list[k] = v
+                try:
+                    self.active_list.pop(k)
+                    self.current_power -= self.node_list[k]['power']
+                except:
+                    continue
+
+            self.waiting_list.clear()
+            self.background_load.clear()
+            print("Opps! Missed to schedule some background loads")
+        #else:
+        # Add all reset items to the list again
+        for k, v in self.background_list.items():
+            self.waiting_list[k] = v
 
     def main(self):
         while True:
@@ -361,8 +405,8 @@ class SmartMeter():
 
             self.current_second = int(time.strftime('%S', time.gmtime()))
 
-            # The scheduler
-            self.schedule(self.clock)
+            # The scheduler for the background loads
+            self.schedule_background((self.clock%self.blocks_per_hour))
 
             # Function that decrease the time for all background loads, type 1
             self.decrease_time()
@@ -402,17 +446,24 @@ class SmartMeter():
             # Wait here until next second
             while(self.current_second == int(time.strftime('%S', time.gmtime()))):
                 pass
-                #sleep
             
             # Increase time
             self.clock += 1
-            self.clock = self.clock % self.blocks_per_hour
 
-            if(self.clock == 0):
+            if (self.clock % self.blocks_per_hour == 0):
                 print("================== NEW HOUR =================")
-                pass
-                # TODO: reset function that enables every 6th second
+                # Increase to new hour and keep it between 0 and 23
+                self.current_hour += 1
+                self.current_hour = self.current_hour % 24
+
+                # Reset function that reset the internal time for all background devices every 6th block (seconds)
                 self.reset_backgrounds()
+
+                # Update pricelist with the last hour
+                self.update_pricelist(self.current_hour)
+
+            if (self.clock % (self.blocks_per_hour*24) == 0):
+                print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
 
             # Sleep for a while! Should not be necessary later when time is working
             time.sleep(0.6)

@@ -30,7 +30,7 @@ import time
 HOST, PORT = 'localhost', 9000
 
 class Node(Thread):
-    def __init__(self, id, power, time, flexible, category, priority, group_id, activity):
+    def __init__(self, id, power, time, flexible, category, priority, group_id, deadline, activity):
         # Set up threading
         Thread.__init__(self)
         self.daemon = True
@@ -45,11 +45,12 @@ class Node(Thread):
         self.flexible = flexible
         self.category = category
         self.priority = priority
+        self.deadline = deadline
         self.group_id = group_id
         self.activity = activity
 
         self.data = {'id':self.id, 'details':{'power':power, 'time':time, 'flexible':flexible,
-            'category':category, 'priority':priority, 'group_id':group_id}}
+            'category':category, 'priority':priority, 'group_id':group_id, 'deadline':deadline}}
 
         payload = {'action': 'register', 'payload':self.data}
 
@@ -140,7 +141,7 @@ class Node(Thread):
             
             # If we are flexible we only want to check messages, otherwise check activity list
             self.check_msg()
-            if(self.flexible != 1):
+            if (not(self.flexible == 1 or self.flexible == 2)):
                 if (current_second != int(time.strftime('%S', time.gmtime()))):
                     self.handle_activity(self.activity[index])
                     index += 1
@@ -148,18 +149,18 @@ class Node(Thread):
         print("Node Done")
 
 if __name__ == '__main__':
-    # id, power, time, flexible, category, priority, group_id, activity
+    # id, power, time, flexible, category, priority, group_id, deadline, activity
     # Array that tell the node when and how long to request power
-    activity0 = [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
+    activity0 = [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
     activity1 = [1]
     activity2 = [1]
     activity3 = [0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,2,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
     activity4 = [0,0,0,0,0,0,1,2,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
     
-    # Create the nodes
-    node0 = Node(0, 350, 0, 0, 1, 0, 1, activity0) # TV
-    node1 = Node(1, 120, 4, 1, 1, 0, 1, activity1) # Computer
-    node2 = Node(2, 100, 2, 1, 1, 0, 1, activity2) # Derp
+    # Create the nodes, time should always be based on 6 (one hour)
+    node0 = Node(0, 1350, 0, 0, 1, 0, 1, 0, activity0) # TV
+    node1 = Node(1, 120, 4, 1, 1, 0, 1, 8, activity1) # Computer
+    node2 = Node(2, 100, 2, 1, 1, 0, 1, 23, activity2) # Derp
     #node3 = Node(3, 400, 0, 0, 1, 0, 1, activity3) # TV
     #node4 = Node(4, 400, 0, 0, 1, 0, 1, activity4) # TV
     
