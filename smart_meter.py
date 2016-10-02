@@ -142,12 +142,7 @@ class SmartMeter():
                 # Add id and power to that index in the list, id to be able to 
                 # call it later when it should be activated
 
-                print("Node id : " + str(node_id))
-                print("power : " + str(power))
-                # For some reason this shit does not work, change order of items
-                obj = {node_id, power}
-                print("obj : " + str(obj))
-                self.block_schedule[i].append(obj)
+                self.block_schedule[i].append(({'id' : node_id, 'power': power}))
                 #item for item in self.block_schedule if item[0] == id
 
         print("Node " + str(id) + " scheduled!")
@@ -343,26 +338,28 @@ class SmartMeter():
         else:
             print('Invalid action received')
 
-    # TODO: Does not work properly
+    # TODO: should also check if deadline tasks should be turned off? Or maybe create another function
     def check_scheduled_tasks(self):
+        print("Check deadline tasks, block : " + str(self.clock))
         # Get which block in the schedule list we should look at
-        block_index = self.block_schedule[self.clock]
-
         # Go through all tasks in the block schedule and see if some of them not is 
         # active, then we know it should be started now
-        
-        #dicts = self.block_schedule[block_index]
-        for k, v in block_index:
-            print("k : " + str(k))
-            print("v : " + str(v))
-            #print("v : " + str(v))
+        for node in self.block_schedule[self.clock]:
+            
             # v could looks like [{1:300}, {2:500}]  should check if id:s is in active list already
-            #if v[0] not in self.active_list:
+            if node['id'] not in self.active_list:
+                print("ID not in active list, should start it now instead")
                 # Send activate message
-            #    payload = json.dumps({'action':'activate'}).encode('utf-8')
-            #    self.sockets[v[0]].send(payload)
+                payload = json.dumps({'action':'activate'}).encode('utf-8')
+                self.sockets[node['id']].send(payload)
+
+                self.active_list[node['id']] = {'id': node['id']}
 
                 # add power to current_power as well
+                self.current_power += node['power']
+            
+            else:
+                print("Task is already started earlier")
 
     def decrease_time(self):
         disc_list = []
