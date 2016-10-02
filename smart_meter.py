@@ -41,7 +41,9 @@ class SmartMeter():
         self.threshold = 350  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.clock = 0
-        self.block_schedule = [] # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
+
+        # TODO: Is there a better way than initialize this list?
+        self.block_schedule = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]] # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
         self.current_hour = 0 # Keeps track of the current hour of the day
     
     def update_price(self):
@@ -56,24 +58,7 @@ class SmartMeter():
         # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
         return lowest_price
 
-    def find_cheapest_hour_with_exception1(self, tmp_list):
-        tmp_pricelist = self.pricelist.copy()
-        hours = []
-
-        # Get the cheapest value
-        cheapest_price = (min(tmp_pricelist.items(), key=lambda x: x[1]))
-        for k, v in tmp_pricelist.items():
-            # If v is same as cheapest price, save that hour
-            if (v == cheapest_price):
-                hours.append(k)
-
-        if (len(hours) < duration):
-            pass
-
-        
-        # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
-        return lowest_price
-
+    # Find cheapest hour that not already is chosen
     def find_cheapest_hour_with_exception(self, tmp_list):
         
         tmp_pricelist = self.pricelist.copy()
@@ -89,9 +74,8 @@ class SmartMeter():
 
         return hour
 
+    # Find cheapest price based on price within the time limit
     def find_cheapest_hour_with_limitation(self, tmp_list, start, deadline):
-        
-        tmp_pricelist = self.pricelist.copy()
 
         # Get the cheapest value
         cheapest_price = 1000.0 # Value just to make sure it will be lower
@@ -101,11 +85,12 @@ class SmartMeter():
         # Create a list with all valid hours
         while (start != deadline):
             valid_hours.append(start)
+            # Increase by one and modulo 24 to catch cases where deadline is lower than starttime
             start += 1
             start = start % 24
 
         # Pick out the hour with cheapest price and fulfill the requirements
-        for k, v in tmp_pricelist.items():
+        for k, v in self.pricelist.items():
             if ((k not in tmp_list) and (k in valid_hours)):
                 if (v < cheapest_price):
                     cheapest_price = v
@@ -113,13 +98,22 @@ class SmartMeter():
 
         return hour
 
-    # Find most expensive hour and return hour and price for that
-    # Should be used to calculate the high price if not schedule
-    # Should consider if there are several hours with same highest price
-    def find_highest_hour(self):
+    # Find the total price for the schedule task if we would have started it 
+    # directly when request
+    def find_worstcase_price(self, duration, power):
+        total_price = 0
+
+        index = self.current_hour
+        stop = (self.current_hour + duration) % 24
         
-        highest_price = (max(self.pricelist.items(), key=lambda x: x[1]))
-        return highest_price
+        # Make it to kW instead of Watt since price is per kWh
+        power = power / 1000
+
+        # Calculate total price from current hour and so many hours the device need to run
+        while (index != stop):
+            total_price += (self.pricelist[index] * power) 
+
+        return total_price
     
     # Find the best hours based on price
     def find_hours(self, duration, deadline):
@@ -130,30 +124,33 @@ class SmartMeter():
 
         return tmp
         
-    # To implement, should handle all scheduable tasks
-    def schedule(self, id, deadline, duration):
+    # TODO: Does not work properly, overwrite when adding to block_schedule
+    def schedule(self, node_id, deadline, duration):
         
+        # TODO: Should it include power as well? Checking threshold and so on
         hours = self.find_hours(duration, deadline)
         print("hours = " + str(hours))
-        if (not hours):
-            print("Could not schedule")
-            return
+
+        power = self.node_list[node_id]['power']
+        print("power : " + str(power))
 
         # Add the power consumption for each block of the best suitable hours
         for h in hours:
             # Find the blocks representing each hour
             index = h * self.blocks_per_hour
-            for i in range(index, self.blocks_per_hour):
-                print("Check a blocks")
-                #self.block_schedule[i] += 
-        
-        '''
-        # This should be removed when the scheduler start background loads
-        self.active_list[id] = {'id': id}
-        
-        # Remove this one when the scheduler is implemented
-        self.current_power += payload['details']['power']
-        '''
+            for i in range(index, (index + self.blocks_per_hour)):
+                # Add id and power to that index in the list, id to be able to 
+                # call it later when it should be activated
+
+                print("Node id : " + str(node_id))
+                print("power : " + str(power))
+                # For some reason this shit does not work, change order of items
+                obj = {node_id, power}
+                print("obj : " + str(obj))
+                self.block_schedule[i].append(obj)
+                #item for item in self.block_schedule if item[0] == id
+
+        print("Node " + str(id) + " scheduled!")
 
     def handle_register(self, payload):
 
@@ -169,21 +166,8 @@ class SmartMeter():
 
         elif (payload['details']['flexible'] == 2):
             print("Scheduable task")
-            deadline = payload['details']['deadline']
-            duration = payload['details']['time']
-
-            self.schedule(id, deadline, duration)
 
         return id
-
-    def calculate_price(self, start_hour, duration, power):
-        # Should return the price if we should have started the task instead of scheduled
-        price = 0
-        for i in range(start_hour, (start_hour+duration)):
-            i = i % 24
-            price += (self.pricelist[i] * (power/1000))
-        print(price)
-        return price
 
     # Called every hour to update last hours price with the following days price
     def update_pricelist(self, current_hour):
@@ -298,25 +282,11 @@ class SmartMeter():
         elif (details['flexible'] == 2):
             print('Schedulable')
 
-            # Schedule the task here
+            deadline = details['deadline']
+            duration = details['time']
 
-            self.active_list[payload['id']] = {'id' : payload['id']}
-
-            payload = json.dumps({'action':'approved'}).encode('utf-8')
-            self.sockets[id].send(payload)
-
-            # Check if we have enough power left in order to turn the device on
-            if (self.current_power + details['power'] <= self.threshold):
-                pass
-                #current_power += details['power']
-                #payload = json.dumps({'action':'approved'}).encode('utf-8')
-                #self.request.send(payload)
-
-            # Put it in the waiting queue since we don't have priorities yet
-            else:
-                pass
-                #waiting_list[payload['id']] = payload
-
+            self.schedule(id, deadline, duration)
+            print(self.block_schedule)
         # Invalid flexible type
         else:
             print('Invalid flexible type')
@@ -372,6 +342,27 @@ class SmartMeter():
         # Invalid, drop it 
         else:
             print('Invalid action received')
+
+    # TODO: Does not work properly
+    def check_scheduled_tasks(self):
+        # Get which block in the schedule list we should look at
+        block_index = self.block_schedule[self.clock]
+
+        # Go through all tasks in the block schedule and see if some of them not is 
+        # active, then we know it should be started now
+        
+        #dicts = self.block_schedule[block_index]
+        for k, v in block_index:
+            print("k : " + str(k))
+            print("v : " + str(v))
+            #print("v : " + str(v))
+            # v could looks like [{1:300}, {2:500}]  should check if id:s is in active list already
+            #if v[0] not in self.active_list:
+                # Send activate message
+            #    payload = json.dumps({'action':'activate'}).encode('utf-8')
+            #    self.sockets[v[0]].send(payload)
+
+                # add power to current_power as well
 
     def decrease_time(self):
         disc_list = []
@@ -491,6 +482,9 @@ class SmartMeter():
 
             # The scheduler for the background loads
             self.schedule_background((self.clock%self.blocks_per_hour))
+
+            # The scheduler for already scheduled tasks, check if some should be turned on
+            self.check_scheduled_tasks()
 
             # Function that decrease the time for all background loads, type 1
             self.decrease_time()
