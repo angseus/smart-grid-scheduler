@@ -37,6 +37,7 @@ class SmartMeter():
         self.active_list = {} # Dict with all active devices
         self.background_list = {} # Dict with all known background devices(active and inactive)
         self.background_load = {} # Dict with all active background devices
+        self.deadline_load = {} # Dict with all active deadline tasks
         self.current_power = 0 
         self.threshold = 350  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
@@ -338,7 +339,6 @@ class SmartMeter():
         else:
             print('Invalid action received')
 
-    # TODO: should also check if deadline tasks should be turned off? Or maybe create another function
     def check_scheduled_tasks(self):
         print("Check deadline tasks, block : " + str(self.clock))
         # Get which block in the schedule list we should look at
@@ -353,17 +353,17 @@ class SmartMeter():
                 payload = json.dumps({'action':'activate'}).encode('utf-8')
                 self.sockets[node['id']].send(payload)
 
+                # Add device to lists that keep track of the active ones
                 self.active_list[node['id']] = {'id': node['id']}
+                self.deadline_load[node['id']] = {'id': node['id']}
 
                 # add power to current_power as well
                 self.current_power += node['power']
-            
-            else:
-                print("Task is already started earlier")
 
     def decrease_time(self):
         disc_list = []
 
+        # If it is a background task
         if (self.background_load):
             for k, v in self.background_load.items():
                 v['time'] = v['time'] - 1
@@ -384,6 +384,22 @@ class SmartMeter():
             # Remove all loads that are done 
             for k in disc_list:
                 self.background_load.pop(k)
+
+        # If it is a deadline task
+        if (self.deadline_load):
+
+            # Get all scheduled task next hour
+            next_step = self.block_schedule[self.clock+1]
+
+            for node in self.block_schedule[self.clock]:
+                if ((node['id'] in self.active_list) and (node not in next_step)):
+                    
+                    payload = json.dumps({'action':'disconnect'}).encode('utf-8')
+                    self.sockets[node['id']].send(payload)
+                    
+                    self.current_power -= self.node_list[node['id']]['power']
+                    self.active_list.pop(node['id'])
+                    self.deadline_load.pop(node['id'])
 
     def schedule_background(self, clock):
         disc_list = []
@@ -473,6 +489,7 @@ class SmartMeter():
             print("Current power: " + str(self.current_power))
             print("Active list: " + str(self.active_list))
             print("Background load: " + str(self.background_load))
+            print("Deadline load: " + str(self.deadline_load))
             print("Waiting list: " + str(self.waiting_list))
 
             self.current_second = int(time.strftime('%S', time.gmtime()))
@@ -539,6 +556,8 @@ class SmartMeter():
 
             if (self.clock % (self.blocks_per_hour*24) == 0):
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
+
+                # Should maybe reset the list that keeps track of the price for each device every hour, or just continue calculate
 
             # Sleep for a while! Should not be necessary later when time is working
             time.sleep(0.6)
