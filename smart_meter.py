@@ -39,12 +39,13 @@ class SmartMeter():
         self.background_load = {} # Dict with all active background devices
         self.deadline_load = {} # Dict with all active deadline tasks
         self.current_power = 0 
-        self.threshold = 350  # maximum allowed power
+        self.threshold = 1000  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.clock = 0
 
         # TODO: Is there a better way than initialize this list?
-        self.block_schedule = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]] # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
+        # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
+        self.block_schedule = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]] 
         self.current_hour = 0 # Keeps track of the current hour of the day
     
     def update_price(self):
@@ -125,9 +126,10 @@ class SmartMeter():
 
         return tmp
         
-    # TODO: Does not work properly, overwrite when adding to block_schedule
     def schedule(self, node_id, deadline, duration):
         
+        print(self.pricelist)
+
         # TODO: Should it include power as well? Checking threshold and so on
         hours = self.find_hours(duration, deadline)
         print("hours = " + str(hours))
@@ -146,7 +148,7 @@ class SmartMeter():
                 self.block_schedule[i].append(({'id' : node_id, 'power': power}))
                 #item for item in self.block_schedule if item[0] == id
 
-        print("Node " + str(id) + " scheduled!")
+        print("Node " + str(node_id) + " scheduled!")
 
     def handle_register(self, payload):
 
@@ -282,7 +284,8 @@ class SmartMeter():
             duration = details['time']
 
             self.schedule(id, deadline, duration)
-            print(self.block_schedule)
+            #print(self.block_schedule)
+        
         # Invalid flexible type
         else:
             print('Invalid flexible type')
@@ -340,7 +343,6 @@ class SmartMeter():
             print('Invalid action received')
 
     def check_scheduled_tasks(self):
-        print("Check deadline tasks, block : " + str(self.clock))
         # Get which block in the schedule list we should look at
         # Go through all tasks in the block schedule and see if some of them not is 
         # active, then we know it should be started now
@@ -540,6 +542,7 @@ class SmartMeter():
                 pass
             
             # Increase time
+            print("Clock: " + str(self.clock))
             self.clock += 1
 
             if (self.clock % self.blocks_per_hour == 0):
