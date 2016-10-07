@@ -43,10 +43,10 @@ class SmartMeter():
         self.background_list = {} # Dict with all known background devices(active and inactive)
         self.background_load = {} # Dict with all active background devices
         self.deadline_load = {} # Dict with all active deadline tasks
-        self.current_power = 0 
+        self.current_power = 200 # start with an actual background load, just to make data more nice to plot
         self.threshold = 1000  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
-        self.clock = 0
+        self.clock = 0 #self.blocks_per_hour*16 # Start at 16 a clock
         
         # TODO: Is there a better way than initialize this list?
         # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
@@ -514,7 +514,7 @@ class SmartMeter():
         plt.ion()
         self.figure, self.ax = plt.subplots()
         self.lines, = self.ax.plot([],[], 'r-', label="LSF")
-        self.lines2, = self.ax.plot([],[], 'b-', label="Without LSF")
+        #self.lines2, = self.ax.plot([],[], 'b-', label="Without LSF")
         self.ax.set_autoscaley_on(True)
         self.ax.set_xlim(0, 144)
         self.ax.set_ylim(0, 350)
@@ -550,56 +550,60 @@ class SmartMeter():
             # Function that decrease the time for all background loads, type 1
             self.decrease_time()
 
-            # Check if the main socket has connection
-            readable, writable, errored = select.select([self.server_socket], [], [], 0)
-            for s in readable:
-                if s is self.server_socket:
-                    client_socket, address = self.server_socket.accept()
-                    data = client_socket.recv(1024)
-
-                    if not data:
-                        continue
-                    data = data.decode('utf-8')
-                    try:
-                        data = json.loads(data)
-                    except Exception as e:
-                        print (e)
-                        continue
-
-                    # Set it up
-                    # Might need to set up a much higher timeout here as well, AND in node.py sockets
-                    client_socket.setblocking(0)
-
-                    # Fetch the id and add it to the socket list
-                    id = self.handle_register(data['payload'])
-                    self.sockets[id] = client_socket
-
-            # Check if the other sockets have sent something to us
-            for s in self.sockets.values():
-                data = self.handle_recv(s)
-                if data:
-                    self.handle_action(data)
-                else:
-                    continue
-
             # Wait here until next second
             while(self.current_second == int(time.strftime('%S', time.gmtime()))):
-                pass
-            
+
+                # Check if the main socket has connection
+                readable, writable, errored = select.select([self.server_socket], [], [], 0)
+                for s in readable:
+                    if s is self.server_socket:
+                        client_socket, address = self.server_socket.accept()
+                        data = client_socket.recv(1024)
+
+                        if not data:
+                            continue
+                        data = data.decode('utf-8')
+                        try:
+                            data = json.loads(data)
+                        except Exception as e:
+                            print (e)
+                            continue
+
+                        # Set it up
+                        # Might need to set up a much higher timeout here as well, AND in node.py sockets
+                        client_socket.setblocking(0)
+
+                        # Fetch the id and add it to the socket list
+                        id = self.handle_register(data['payload'])
+                        self.sockets[id] = client_socket
+
+
+                # Check if the other sockets have sent something to us
+                for s in self.sockets.values():
+                    data = self.handle_recv(s)
+                    if data:
+                        self.handle_action(data)
+                    else:
+                        continue
+                time.sleep(0.4)
+
             # Update plot data
             self.xAxisMinArray.append(self.clock)
-            self.totalValue.append(self.current_power)
+            self.totalValue.append(self.current_power)            
 
             # Increase time
             print("Clock: " + str(self.clock))
             self.clock += 1
+
+            print(self.xAxisMinArray)
+            print(self.totalValue)
 
             if (self.clock % self.blocks_per_hour == 0):
                 print("================== NEW HOUR =================")
                 # Increase to new hour and keep it between 0 and 23
                 self.current_hour += 1
                 self.current_hour = self.current_hour % 24
-
+                break
                 # Reset function that reset the internal time for all background devices every 6th block (seconds)
                 self.reset_backgrounds()
 
@@ -610,17 +614,11 @@ class SmartMeter():
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
 
                 # Should maybe reset the list that keeps track of the price for each device every hour, or just continue calculate
-            
-            # Plot dynamically
-            #self.on_running(xAxisMinArray, totalValue, totalValueWithoutLSF)
-            print(self.xAxisMinArray)
-            print(self.totalValue)
-            #self.on_running(self.xAxisMinArray, self.totalValue)
-            self.drawPlot(self.xAxisMinArray, self.totalValue)
-            
-            # Sleep for a while! Should not be necessary later when time is working
-            time.sleep(0.6)
 
+        # Plot when a day is done   
+        #self.on_running(self.xAxisMinArray, self.totalValue)
+        self.drawPlot(self.xAxisMinArray, self.totalValue)
+            
 if __name__ == "__main__":
     # Host info
     smart_meter = SmartMeter()
