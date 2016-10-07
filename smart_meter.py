@@ -15,6 +15,7 @@ import socket
 import threading
 import time
 import select
+import matplotlib.pyplot as plt
 
 class SmartMeter():
     def __init__(self):
@@ -30,6 +31,10 @@ class SmartMeter():
         self.server_socket.listen(10)
         self.sockets = {}
         print ("Listening on port: " + str(PORT))
+        
+        # Variables for plotting
+        self.xAxisMinArray = []
+        self.totalValue = [] # Power consumption
 
         # Scheduling variables
         self.node_list = {} # Dict with all known devices
@@ -42,7 +47,7 @@ class SmartMeter():
         self.threshold = 1000  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.clock = 0
-
+        
         # TODO: Is there a better way than initialize this list?
         # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
         self.block_schedule = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]] 
@@ -478,7 +483,47 @@ class SmartMeter():
         for k, v in self.background_list.items():
             self.waiting_list[k] = v
 
+    # Function from previous project to plot the data
+    def drawPlot(self, minutesArray, powerArray):
+        '''
+        Draw final simulation plot. (Not used anymore)
+        '''
+        plt.plot(minutesArray, powerArray)
+        plt.ylabel('Watt')
+        plt.xlabel('Hours')
+        plt.show() 
+    
+    # Function from previous project to plot the data
+    #def on_running(self, xdata, ydata, y2data):
+    def on_running(self, xdata, ydata):
+        # Update data (with the new _and_ the old points)
+        self.lines.set_xdata(xdata)
+        self.lines.set_ydata(ydata)
+        #self.lines2.set_xdata(xdata)
+        #self.lines2.set_ydata(y2data)
+        # Need both of these in order to rescale
+        self.ax.relim()
+        self.ax.autoscale_view()
+        # We need to draw *and* flush        
+        self.figure.canvas.draw()
+        self.figure.canvas.flush_events()
+
     def main(self):
+
+        # Initialize real-time plot
+        plt.ion()
+        self.figure, self.ax = plt.subplots()
+        self.lines, = self.ax.plot([],[], 'r-', label="LSF")
+        self.lines2, = self.ax.plot([],[], 'b-', label="Without LSF")
+        self.ax.set_autoscaley_on(True)
+        self.ax.set_xlim(0, 144)
+        self.ax.set_ylim(0, 350)
+        self.ax.set_xlabel('Minutes')
+        self.ax.set_ylabel('Watt')
+        self.ax.grid()
+        plt.legend()
+        plt.show()
+
         while True:
             '''
             current_second = int(time.strftime('%S', time.gmtime()))
@@ -541,6 +586,10 @@ class SmartMeter():
             while(self.current_second == int(time.strftime('%S', time.gmtime()))):
                 pass
             
+            # Update plot data
+            self.xAxisMinArray.append(self.clock)
+            self.totalValue.append(self.current_power)
+
             # Increase time
             print("Clock: " + str(self.clock))
             self.clock += 1
@@ -561,7 +610,14 @@ class SmartMeter():
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
 
                 # Should maybe reset the list that keeps track of the price for each device every hour, or just continue calculate
-
+            
+            # Plot dynamically
+            #self.on_running(xAxisMinArray, totalValue, totalValueWithoutLSF)
+            print(self.xAxisMinArray)
+            print(self.totalValue)
+            #self.on_running(self.xAxisMinArray, self.totalValue)
+            self.drawPlot(self.xAxisMinArray, self.totalValue)
+            
             # Sleep for a while! Should not be necessary later when time is working
             time.sleep(0.6)
 
