@@ -84,39 +84,59 @@ class Node(Thread):
     def thread_print(self, msg):
         print("Node: " + str(self.id) + ", msg: " + str(msg))
 
+    def handle_recv(self):
+        try:
+            data = self.sock.recv(1024)
+        except Exception as e:
+            return
+
+        if not data:
+            return
+        data = data.decode('utf-8')
+        res = []
+        try:
+            data = data.split('}')
+            for part in data:
+                if part:
+                    part = part + '}'
+                    part = json.loads(part)
+                    res.append(part)
+                else:
+                    continue  
+        except Exception as e:
+            self.thread_print(e)
+            return
+
+        return res
+
     def check_msg(self):
-        try:
-            res = self.sock.recv(1024)
-            self.thread_print(res)
-        except Exception as e:
-            time.sleep(0.0001)
-            res = None
-        if not res:
+        data = self.handle_recv()
+        if data:
+            pass
+        else:
             return
-        res = res.decode('utf-8')
-        self.thread_print(res)
-        try:
-            res = json.loads(res)
-            self.thread_print(res)
-        except Exception as e:
-            print("NU kukar det")
-            print (e)
-            return
+
+        self.thread_print(data)
+        for action in data:
+            self.handle_action(action)
+
+    def handle_action(self, data):
         
         # Check if our request was approved
-        if (res['action'] == 'approved'):
+        if (data['action'] == 'approved'):
             self.switch_on() 
 
         # Check if we should perform our background activity now
-        elif (res['action'] == 'activate'):
+        elif (data['action'] == 'activate'):
             self.switch_on()
 
         # Check if we should disconnect
-        elif (res['action'] == 'disconnect'):
+        elif (data['action'] == 'disconnect'):
             self.switch_off()
         
         # Invalid
         else:
+            self.thread_print (data)
             raise Exception
 
     def handle_activity(self, action):

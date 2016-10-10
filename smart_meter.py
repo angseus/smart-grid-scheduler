@@ -525,20 +525,10 @@ class SmartMeter():
         plt.show()
 
         while True:
-            '''
-            current_second = int(time.strftime('%S', time.gmtime()))
-            if (current_second != int(time.strftime('%S', time.gmtime()))):
-                print("Inne på sekund: " + str(current_second))
-                #self.schedule()
-                current_second = int(time.strftime('%S', time.gmtime()))
-            '''
-            print("======== New block ========")
-            print("Current power: " + str(self.current_power))
-            print("Active list: " + str(self.active_list))
-            print("Background load: " + str(self.background_load))
-            print("Deadline load: " + str(self.deadline_load))
-            print("Waiting list: " + str(self.waiting_list))
+            # Always decrease time when we executed one turn in the loop
+            self.decrease_time()
 
+            # Fetch current second
             self.current_second = int(time.strftime('%S', time.gmtime()))
 
             # The scheduler for the background loads
@@ -547,8 +537,12 @@ class SmartMeter():
             # The scheduler for already scheduled tasks, check if some should be turned on
             self.check_scheduled_tasks()
 
-            # Function that decrease the time for all background loads, type 1
-            self.decrease_time()
+            print("======== New block ========")
+            print("Current power: " + str(self.current_power))
+            print("Active list: " + str(self.active_list))
+            print("Background load: " + str(self.background_load))
+            print("Deadline load: " + str(self.deadline_load))
+            print("Waiting list: " + str(self.waiting_list))
 
             # Wait here until next second
             while(self.current_second == int(time.strftime('%S', time.gmtime()))):
@@ -603,7 +597,7 @@ class SmartMeter():
                 # Increase to new hour and keep it between 0 and 23
                 self.current_hour += 1
                 self.current_hour = self.current_hour % 24
-                break
+
                 # Reset function that reset the internal time for all background devices every 6th block (seconds)
                 self.reset_backgrounds()
 
