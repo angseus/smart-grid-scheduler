@@ -20,8 +20,8 @@ import matplotlib.pyplot as plt
 class SmartMeter():
     def __init__(self):
         # Fetch electricity price for the following 24 hours
-        self.pricelist = self.update_price()
-        self.next_pricelist = self.update_price() # This should be different from the first one
+        self.pricelist = self.fetch_pricelist()
+        self.next_pricelist = self.fetch_pricelist() # This should be different from the first one
 
         # Start the server
         HOST, PORT = "localhost", 9000
@@ -46,22 +46,28 @@ class SmartMeter():
         self.current_hour = 0 # Keeps track of the current hour of the day
         self.block_schedule = self.block_schedule = [[]] * (self.blocks_per_hour * 24) # Schedule for all blocks during 1 day
         
-    
-    def update_price(self):
+    """
+    Fetch a pricelist.
+    """
+    def fetch_pricelist(self):
         return download_price.downloadPrice("elspot_prices.xls")
 
-    """TODO: Should maybe have an input with number of blocks that's needed and be returned the number to the blocks of the cheapest ones
-    Find cheapest hour and return hour and price for that
-    Should consider if there are several hours with same lowest price, which one has least schedule?"""
+    """
+    Find the cheapest hour in the pricelist. 
+    Should maybe consider how much power that is scheduled to that hour already?
+    Could be used if there are blocks with the same price. 
+    """
     def find_cheapest_hour(self):
         
         lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
         # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
         return lowest_price
 
-    # Find the total price for the schedule task if we would have started it 
-    # directly when request
-    def find_worstcase_price(self, duration, power):
+    """
+    Calculate the total price if we would have started now instead of 
+    scheduling it.
+    """
+    def calculate_worstcase_price(self, duration, power):
         total_price = 0
 
         index = self.current_hour
@@ -76,7 +82,9 @@ class SmartMeter():
 
         return total_price
     
-    # Find the best hours based on price
+    """
+    Find hours between start and deadline (length of duration blocks) with the best price.
+    """
     def find_hours(self, duration, deadline):
         
         # Get the cheapest value
@@ -103,7 +111,10 @@ class SmartMeter():
 
         return hours
         
-    def schedule(self, node_id, deadline, duration):
+    """
+    Schedule a task with a deadline.
+    """
+    def schedule_deadline_task(self, node_id, deadline, duration):
         
         print(self.pricelist)
 
@@ -127,6 +138,9 @@ class SmartMeter():
 
         print("Node " + str(node_id) + " scheduled!")
 
+    """
+    Register a node. Save neccesary information about it.
+    """
     def handle_register(self, payload):
 
         # Add the node to the list of all nodes
@@ -144,13 +158,16 @@ class SmartMeter():
 
         return id
 
-    # Called every hour to update last hours price with the following days price
+    """
+    Update the pricelist every hour.
+    """
     def update_pricelist(self, current_hour):
-        # Update the price for the last hour with the price for that hour next day
         self.pricelist[current_hour-1] = self.next_pricelist[current_hour-1]
 
-    # Helpfunction that help finding the best backgroundload to pause, 
-    # with shortest time left, since it is easier to schedule later
+    """
+    Helpfunction that help finding the best background load to pause
+    with the shortest time left, since it is easier to schedule it later.
+    """
     def find_least_slack(self, temp_list):
         # Sort by lowest time block left, and if same, sort by lowest power
         if (len(temp_list) > 0):
@@ -194,6 +211,11 @@ class SmartMeter():
         else:
             return None, None
 
+    """
+    Handle a request from a node. This might be a request 
+    to schedule something with a deadline or an interactive
+    task that needs to be started right away.
+    """
     def handle_request(self, payload):
         print('Request from node: ' + str(payload['id']))
         id = payload['id']
@@ -242,31 +264,21 @@ class SmartMeter():
                     self.current_power -= self.node_list[node_id]['power']
                     self.background_load.pop(node_id)
 
-        # Background load with time interval
-        elif (details['flexible'] == 1):
-            print('Background')
-            self.active_list[payload['id']] = {'id' : payload['id']}
-            self.background_load[payload['id']] = payload
-
-            payload = json.dumps({'action':'approved'}).encode('utf-8')
-            self.sockets[id].send(payload)
-
-            self.current_power += details['power']
-
-        # Background load with deadline
+        # Deadline task
         elif (details['flexible'] == 2):
             print('Schedulable')
 
             deadline = details['deadline']
             duration = details['time']
 
-            self.schedule(id, deadline, duration)
-            #print(self.block_schedule)
-        
-        # Invalid flexible type
+            self.schedule_deadline_task(id, deadline, duration)
         else:
-            print('Invalid flexible type')
+            raise Exception
 
+    """
+    Disconnect a load. This should not happen except
+    for interactive loads.
+    """
     def handle_disconnect(self, payload):
         print('Disconnect from node: ' + str(payload['id']))
         id = payload['id']
@@ -279,9 +291,17 @@ class SmartMeter():
         details = self.node_list[id]
         self.current_power -= details['power']
 
+    """
+    Update from a node. This is currently not used
+    from the node / load since we assume that loads
+    does not change during runtime. 
+    """
     def handle_update(self, payload):
         print('Update from node: ' + str(payload['id']))
 
+    """
+    Helper function for receive
+    """
     def handle_recv(self, s):
         try:
             data = s.recv(1024)
@@ -299,6 +319,11 @@ class SmartMeter():
 
         return data
 
+    """
+    Helper function to handle different incoming 
+    actions. Send to the correct helper function for 
+    that action.
+    """
     def handle_action(self, data):
         action = data['action']
         payload = data['payload']
@@ -319,6 +344,9 @@ class SmartMeter():
         else:
             print('Invalid action received')
 
+    """
+    Check if there is a scheduled task that should be started this block.
+    """
     def check_scheduled_tasks(self):
         # Get which block in the schedule list we should look at
         # Go through all tasks in the block schedule and see if some of them not is 
@@ -339,6 +367,12 @@ class SmartMeter():
                 # add power to current_power as well
                 self.current_power += node['power']
 
+    """
+    We want to change to the next block. Decrease the remaining 
+    time of all background loads with 1 and check if we should disconnect
+    a scheduled task for now. The scheduled task might be finished, otherwise
+    it will be started another block. 
+    """
     def decrease_time(self):
         disc_list = []
 
@@ -380,6 +414,11 @@ class SmartMeter():
                     self.active_list.pop(node['id'])
                     self.deadline_load.pop(node['id'])
 
+    """
+    Start a background load if the threshold is okay. 
+    Also check if a background load MUST be started
+    in order to make it this hour. 
+    """
     def schedule_background(self, clock):
         disc_list = []
 
@@ -430,6 +469,9 @@ class SmartMeter():
             else:
                 print("Uses to much power to enable background")
     
+    """
+    Function that runs every hour in order to reset background loads.
+    """
     def reset_backgrounds(self):
         # Loop through all background devices and reset the time
         for k, v in self.background_list.items():
@@ -454,6 +496,9 @@ class SmartMeter():
         for k, v in self.background_list.items():
             self.waiting_list[k] = v
 
+    """
+    Main function that handles all other functions.
+    """
     def main(self):
         while True:
             # Always decrease time when we executed one turn in the loop
