@@ -374,7 +374,7 @@ class SmartMeter():
     it will be started another block. 
     """
     def decrease_time(self):
-        disc_list = []
+        disconnect_list = []
 
         # If it is a background task
         if (self.background_load):
@@ -392,10 +392,10 @@ class SmartMeter():
                     self.active_list.pop(k)
 
                     # add id:s to a temporary list since you can't change size of the list you iterate over
-                    disc_list.append(k)
+                    disconnect_list.append(k)
             
             # Remove all loads that are done 
-            for k in disc_list:
+            for k in disconnect_list:
                 self.background_load.pop(k)
 
         # If it is a deadline task
@@ -420,7 +420,7 @@ class SmartMeter():
     in order to make it this hour. 
     """
     def schedule_background(self, clock):
-        disc_list = []
+        activate_list = []
 
         # Check if there are any loads that have to be turned on this round
         if (self.waiting_list):
@@ -442,10 +442,10 @@ class SmartMeter():
                     self.background_load[k] = v
 
                     # add id:s to a temporary list since you can't change size of the list you iterate over
-                    disc_list.append(k)
+                    activate_list.append(k)
             
             # Remove all loads that are started 
-            for k in disc_list:
+            for k in activate_list:
                 self.waiting_list.pop(k)
 
             while ((self.current_power < self.threshold) and self.waiting_list):
