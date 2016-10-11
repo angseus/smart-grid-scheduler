@@ -46,6 +46,9 @@ class SmartMeter():
         self.current_hour = 0 # Keeps track of the current hour of the day
         self.block_schedule = self.block_schedule = [[]] * (self.blocks_per_hour * 24) # Schedule for all blocks during 1 day
         
+    ###########################################################################
+    # Price functions                                                         #
+    ###########################################################################
     """
     Fetch a pricelist.
     """
@@ -53,15 +56,10 @@ class SmartMeter():
         return download_price.downloadPrice("elspot_prices.xls")
 
     """
-    Find the cheapest hour in the pricelist. 
-    Should maybe consider how much power that is scheduled to that hour already?
-    Could be used if there are blocks with the same price. 
+    Update the pricelist every hour.
     """
-    def find_cheapest_hour(self):
-        
-        lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
-        # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
-        return lowest_price
+    def update_pricelist(self, current_hour):
+        self.pricelist[current_hour-1] = self.next_pricelist[current_hour-1]
 
     """
     Calculate the total price if we would have started now instead of 
@@ -81,6 +79,20 @@ class SmartMeter():
             total_price += (self.pricelist[index] * power) 
 
         return total_price
+
+    ###########################################################################
+    # Scheduling a task with deadline                                         #
+    ###########################################################################
+    """
+    Find the cheapest hour in the pricelist. 
+    Should maybe consider how much power that is scheduled to that hour already?
+    Could be used if there are blocks with the same price. 
+    """
+    def find_cheapest_hour(self):
+        
+        lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
+        # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
+        return lowest_price
     
     """
     Find hours between start and deadline (length of duration blocks) with the best price.
@@ -139,31 +151,31 @@ class SmartMeter():
         print("Node " + str(node_id) + " scheduled!")
 
     """
-    Register a node. Save neccesary information about it.
+    Check if there is a scheduled task that should be started this block.
     """
-    def handle_register(self, payload):
+    def check_scheduled_tasks(self):
+        # Get which block in the schedule list we should look at
+        # Go through all tasks in the block schedule and see if some of them not is 
+        # active, then we know it should be started now
+        for node in self.block_schedule[self.clock]:
+            
+            # v could looks like [{1:300}, {2:500}]  should check if id:s is in active list already
+            if node['id'] not in self.active_list:
+                print("ID not in active list, should start it now instead")
+                # Send activate message
+                payload = json.dumps({'action':'activate'}).encode('utf-8')
+                self.sockets[node['id']].send(payload)
 
-        # Add the node to the list of all nodes
-        print('Register from node: ' + str(payload['id']))
-        self.node_list[payload['id']] = payload['details'].copy()
-        id = payload['id']
-        
-        # Check if the node is a background task
-        if (payload['details']['flexible'] == 1):
-            self.background_list[payload['id']] = payload['details']
-            self.waiting_list[payload['id']] = payload['details']
+                # Add device to lists that keep track of the active ones
+                self.active_list[node['id']] = {'id': node['id']}
+                self.deadline_load[node['id']] = {'id': node['id']}
 
-        elif (payload['details']['flexible'] == 2):
-            print("Scheduable task")
+                # add power to current_power as well
+                self.current_power += node['power']
 
-        return id
-
-    """
-    Update the pricelist every hour.
-    """
-    def update_pricelist(self, current_hour):
-        self.pricelist[current_hour-1] = self.next_pricelist[current_hour-1]
-
+    ###########################################################################
+    # Background / Interactive Scheduling                                     #
+    ###########################################################################
     """
     Helpfunction that help finding the best background load to pause
     with the shortest time left, since it is easier to schedule it later.
@@ -210,6 +222,161 @@ class SmartMeter():
         # If no backgroundloads exists, send back a message for that
         else:
             return None, None
+
+    """
+    Start a background load if the threshold is okay. 
+    Also check if a background load MUST be started
+    in order to make it this hour. 
+    """
+    def schedule_background(self, clock):
+        activate_list = []
+
+        # Check if there are any loads that have to be turned on this round
+        if (self.waiting_list):
+            time_left = self.blocks_per_hour - clock
+            for k, v in self.waiting_list.items():
+                if (v['time'] == time_left):
+                    print("Turn on emergency background for node: " + str(k))
+                    # Send activate msg to the background node
+                    payload = json.dumps({'action':'approved'}).encode('utf-8')
+                    self.sockets[k].send(payload)
+                    
+                    # Update current power
+                    self.current_power += v['power']
+
+                    # Add it to the active list and remove it from waiting list
+                    self.active_list[k] = {'id': k}                   
+
+                    # Add it to background loads to be able to see active backgrounds
+                    self.background_load[k] = v
+
+                    # add id:s to a temporary list since you can't change size of the list you iterate over
+                    activate_list.append(k)
+            
+            # Remove all loads that are started 
+            for k in activate_list:
+                self.waiting_list.pop(k)
+
+            while ((self.current_power < self.threshold) and self.waiting_list):
+                # find the background node that should be turned off
+                node_id, node_details = self.find_least_slack(self.waiting_list)
+                print("Should turn on " + str(node_id))
+                
+                # Send activate msg to the background node
+                payload = json.dumps({'action':'approved'}).encode('utf-8')
+                self.sockets[node_id].send(payload)
+                
+                # Update current power
+                self.current_power += node_details['power']
+
+                # Add it to the active list and remove it from waiting list
+                self.active_list[node_id] = {'id': node_id}
+                self.waiting_list.pop(node_id)
+
+                # Add it to background loads to be able to see active backgrounds
+                self.background_load[node_id] = node_details
+            else:
+                print("Uses to much power to enable background")
+    
+    """
+    Function that runs every hour in order to reset background loads.
+    """
+    def reset_backgrounds(self):
+        # Loop through all background devices and reset the time
+        for k, v in self.background_list.items():
+            v['time'] = self.node_list[k]['time']
+            self.background_list.update({k: v})
+
+        # If we miss someone, should throw error or empty the list
+        if ((len(self.waiting_list) != 0) or (len(self.background_load) != 0)):
+            # Remove all background loads from active list
+            for k, v in self.background_list.items():
+                try:
+                    self.active_list.pop(k)
+                    self.current_power -= self.node_list[k]['power']
+                except:
+                    continue
+
+            self.waiting_list.clear()
+            self.background_load.clear()
+            print("Opps! Missed to schedule some background loads")
+
+        # Add all reset items to the list again
+        for k, v in self.background_list.items():
+            self.waiting_list[k] = v
+
+    ###########################################################################
+    # General Helper functions                                                #
+    ###########################################################################
+    """
+    We want to change to the next block. Decrease the remaining 
+    time of all background loads with 1 and check if we should disconnect
+    a scheduled task for now. The scheduled task might be finished, otherwise
+    it will be started another block. 
+    """
+    def decrease_time(self):
+        disconnect_list = []
+
+        # If it is a background task
+        if (self.background_load):
+            for k, v in self.background_load.items():
+                v['time'] = v['time'] - 1
+                
+                # If time is 0, disconnect the device
+                if (v['time'] == 0):
+                    print(str(k) + " is done for this hour")
+                    # Send disconnect msg to the background node
+                    payload = json.dumps({'action':'disconnect'}).encode('utf-8')
+                    self.sockets[k].send(payload)
+                    
+                    self.current_power -= v['power']
+                    self.active_list.pop(k)
+
+                    # add id:s to a temporary list since you can't change size of the list you iterate over
+                    disconnect_list.append(k)
+            
+            # Remove all loads that are done 
+            for k in disconnect_list:
+                self.background_load.pop(k)
+
+        # If it is a deadline task
+        if (self.deadline_load):
+
+            # Get all scheduled task next hour
+            next_step = self.block_schedule[self.clock+1]
+
+            for node in self.block_schedule[self.clock]:
+                if ((node['id'] in self.active_list) and (node not in next_step)):
+                    
+                    payload = json.dumps({'action':'disconnect'}).encode('utf-8')
+                    self.sockets[node['id']].send(payload)
+                    
+                    self.current_power -= self.node_list[node['id']]['power']
+                    self.active_list.pop(node['id'])
+                    self.deadline_load.pop(node['id'])
+
+    ###########################################################################
+    # Communication and handle helpers                                        #
+    ###########################################################################
+    """
+    Register a node. Save neccesary information about it.
+    """
+    def handle_register(self, payload):
+
+        # Add the node to the list of all nodes
+        print('Register from node: ' + str(payload['id']))
+        self.node_list[payload['id']] = payload['details'].copy()
+        id = payload['id']
+        
+        # Check if the node is a background task
+        if (payload['details']['flexible'] == 1):
+            self.background_list[payload['id']] = payload['details']
+            self.waiting_list[payload['id']] = payload['details']
+
+        elif (payload['details']['flexible'] == 2):
+            print("Scheduable task")
+
+        return id
 
     """
     Handle a request from a node. This might be a request 
@@ -344,161 +511,9 @@ class SmartMeter():
         else:
             print('Invalid action received')
 
-    """
-    Check if there is a scheduled task that should be started this block.
-    """
-    def check_scheduled_tasks(self):
-        # Get which block in the schedule list we should look at
-        # Go through all tasks in the block schedule and see if some of them not is 
-        # active, then we know it should be started now
-        for node in self.block_schedule[self.clock]:
-            
-            # v could looks like [{1:300}, {2:500}]  should check if id:s is in active list already
-            if node['id'] not in self.active_list:
-                print("ID not in active list, should start it now instead")
-                # Send activate message
-                payload = json.dumps({'action':'activate'}).encode('utf-8')
-                self.sockets[node['id']].send(payload)
-
-                # Add device to lists that keep track of the active ones
-                self.active_list[node['id']] = {'id': node['id']}
-                self.deadline_load[node['id']] = {'id': node['id']}
-
-                # add power to current_power as well
-                self.current_power += node['power']
-
-    """
-    We want to change to the next block. Decrease the remaining 
-    time of all background loads with 1 and check if we should disconnect
-    a scheduled task for now. The scheduled task might be finished, otherwise
-    it will be started another block. 
-    """
-    def decrease_time(self):
-        disconnect_list = []
-
-        # If it is a background task
-        if (self.background_load):
-            for k, v in self.background_load.items():
-                v['time'] = v['time'] - 1
-                
-                # If time is 0, disconnect the device
-                if (v['time'] == 0):
-                    print(str(k) + " is done for this hour")
-                    # Send disconnect msg to the background node
-                    payload = json.dumps({'action':'disconnect'}).encode('utf-8')
-                    self.sockets[k].send(payload)
-                    
-                    self.current_power -= v['power']
-                    self.active_list.pop(k)
-
-                    # add id:s to a temporary list since you can't change size of the list you iterate over
-                    disconnect_list.append(k)
-            
-            # Remove all loads that are done 
-            for k in disconnect_list:
-                self.background_load.pop(k)
-
-        # If it is a deadline task
-        if (self.deadline_load):
-
-            # Get all scheduled task next hour
-            next_step = self.block_schedule[self.clock+1]
-
-            for node in self.block_schedule[self.clock]:
-                if ((node['id'] in self.active_list) and (node not in next_step)):
-                    
-                    payload = json.dumps({'action':'disconnect'}).encode('utf-8')
-                    self.sockets[node['id']].send(payload)
-                    
-                    self.current_power -= self.node_list[node['id']]['power']
-                    self.active_list.pop(node['id'])
-                    self.deadline_load.pop(node['id'])
-
-    """
-    Start a background load if the threshold is okay. 
-    Also check if a background load MUST be started
-    in order to make it this hour. 
-    """
-    def schedule_background(self, clock):
-        activate_list = []
-
-        # Check if there are any loads that have to be turned on this round
-        if (self.waiting_list):
-            time_left = self.blocks_per_hour - clock
-            for k, v in self.waiting_list.items():
-                if (v['time'] == time_left):
-                    print("Turn on emergency background for node: " + str(k))
-                    # Send activate msg to the background node
-                    payload = json.dumps({'action':'approved'}).encode('utf-8')
-                    self.sockets[k].send(payload)
-                    
-                    # Update current power
-                    self.current_power += v['power']
-
-                    # Add it to the active list and remove it from waiting list
-                    self.active_list[k] = {'id': k}                   
-
-                    # Add it to background loads to be able to see active backgrounds
-                    self.background_load[k] = v
-
-                    # add id:s to a temporary list since you can't change size of the list you iterate over
-                    activate_list.append(k)
-            
-            # Remove all loads that are started 
-            for k in activate_list:
-                self.waiting_list.pop(k)
-
-            while ((self.current_power < self.threshold) and self.waiting_list):
-                # find the background node that should be turned off
-                node_id, node_details = self.find_least_slack(self.waiting_list)
-                print("Should turn on " + str(node_id))
-                
-                # Send activate msg to the background node
-                payload = json.dumps({'action':'approved'}).encode('utf-8')
-                self.sockets[node_id].send(payload)
-                
-                # Update current power
-                self.current_power += node_details['power']
-
-                # Add it to the active list and remove it from waiting list
-                self.active_list[node_id] = {'id': node_id}
-                self.waiting_list.pop(node_id)
-
-                # Add it to background loads to be able to see active backgrounds
-                self.background_load[node_id] = node_details
-            else:
-                print("Uses to much power to enable background")
-    
-    """
-    Function that runs every hour in order to reset background loads.
-    """
-    def reset_backgrounds(self):
-        # Loop through all background devices and reset the time
-        for k, v in self.background_list.items():
-            v['time'] = self.node_list[k]['time']
-            self.background_list.update({k: v})
-
-        # If we miss someone, should throw error or empty the list
-        if ((len(self.waiting_list) != 0) or (len(self.background_load) != 0)):
-            # Remove all background loads from active list
-            for k, v in self.background_list.items():
-                try:
-                    self.active_list.pop(k)
-                    self.current_power -= self.node_list[k]['power']
-                except:
-                    continue
-
-            self.waiting_list.clear()
-            self.background_load.clear()
-            print("Opps! Missed to schedule some background loads")
-
-        # Add all reset items to the list again
-        for k, v in self.background_list.items():
-            self.waiting_list[k] = v
-
-    """
-    Main function that handles all other functions.
-    """
+    ###########################################################################
+    # Main                                                                    #
+    ###########################################################################
     def main(self):
         while True:
             # Always decrease time when we executed one turn in the loop
@@ -578,6 +593,5 @@ class SmartMeter():
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
             
 if __name__ == "__main__":
-    # Host info
     smart_meter = SmartMeter()
     smart_meter.main()
