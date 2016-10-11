@@ -50,54 +50,14 @@ class SmartMeter():
     def update_price(self):
         return download_price.downloadPrice("elspot_prices.xls")
 
-    # TODO: Should maybe have an input with number of blocks that's needed and be returned the number to the blocks of the cheapest ones
-    # Find cheapest hour and return hour and price for that
-    # Should consider if there are several hours with same lowest price, which one has least schedule?
+    """TODO: Should maybe have an input with number of blocks that's needed and be returned the number to the blocks of the cheapest ones
+    Find cheapest hour and return hour and price for that
+    Should consider if there are several hours with same lowest price, which one has least schedule?"""
     def find_cheapest_hour(self):
         
         lowest_price = (min(self.pricelist.items(), key=lambda x: x[1]))
         # print ("Hour: " + str(lowest[0]) + " is chepeast, " + str(lowest[1]) + "kr/kWh")
         return lowest_price
-
-    # Find cheapest hour that not already is chosen
-    def find_cheapest_hour_with_exception(self, tmp_list):
-        
-        tmp_pricelist = self.pricelist.copy()
-
-        # Get the cheapest value
-        cheapest_price = 1000.0 # Value just to make sure it will be lower
-
-        for k, v in tmp_pricelist.items():
-            if (k not in tmp_list):
-                if (v < cheapest_price):
-                    cheapest_price = v
-                    hour = k
-
-        return hour
-
-    # Find cheapest price based on price within the time limit
-    def find_cheapest_hour_with_limitation(self, tmp_list, start, deadline):
-
-        # Get the cheapest value
-        cheapest_price = 1000.0 # Value just to make sure it will be lower
-        
-        valid_hours = []
-
-        # Create a list with all valid hours
-        while (start != deadline):
-            valid_hours.append(start)
-            # Increase by one and modulo 24 to catch cases where deadline is lower than starttime
-            start += 1
-            start = start % 24
-
-        # Pick out the hour with cheapest price and fulfill the requirements
-        for k, v in self.pricelist.items():
-            if ((k not in tmp_list) and (k in valid_hours)):
-                if (v < cheapest_price):
-                    cheapest_price = v
-                    hour = k
-
-        return hour
 
     # Find the total price for the schedule task if we would have started it 
     # directly when request
@@ -118,12 +78,30 @@ class SmartMeter():
     
     # Find the best hours based on price
     def find_hours(self, duration, deadline):
-        tmp = []
+        
+        # Get the cheapest value
+        cheapest_price = 1000.0 # Value just to make sure it will be lower
+        
+        valid_hours = [] # This is a list with valid hours (used in order to check the upcoming day)
+        hours = [] # This is a list of all the hours that have been chosen
+        start = self.current_hour
+        # Create a list with all valid hours
+        while (start != deadline):
+            valid_hours.append(start)
+            # Increase by one and modulo 24 to catch cases where deadline is lower than starttime
+            start += 1
+            start = start % 24
 
         for i in range(0, duration):
-            tmp.append(self.find_cheapest_hour_with_limitation(tmp, self.current_hour, deadline))
+            # Pick out the hour with cheapest price and fulfill the requirements
+            for k, v in self.pricelist.items():
+                if ((k not in hours) and (k in valid_hours)):
+                    if (v < cheapest_price):
+                        cheapest_price = v
+                        hour = k
+            hours.append(hour)
 
-        return tmp
+        return hours
         
     def schedule(self, node_id, deadline, duration):
         
