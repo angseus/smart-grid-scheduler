@@ -82,6 +82,21 @@ class SmartMeter():
 
         return total_price
 
+    """
+    Calculate the total price of a scheduled task.
+    """
+    def calculate_price(self, hours, power):
+        total_price = 0
+
+        # Make it to kW instead of Watt since price is per kWh
+        power = power / 1000
+        
+        for hour in hours:
+            total_price += self.pricelist[hour] * power
+
+        return total_price
+
+
     ###########################################################################
     # Scheduling a task with deadline                                         #
     ###########################################################################
@@ -150,6 +165,7 @@ class SmartMeter():
         print("Node " + str(node_id) + " scheduled!")
 
         print("Total price if scheduled now: " + str(self.calculate_worstcase_price(duration, power)))
+        print("Total price when scheduled now: " + str(self.calculate_price(hours, power)))
 
 
     """
