@@ -491,7 +491,7 @@ class SmartMeter():
             self.waiting_list.clear()
             self.background_load.clear()
             print("Opps! Missed to schedule some background loads")
-        #else:
+
         # Add all reset items to the list again
         for k, v in self.background_list.items():
             self.waiting_list[k] = v
