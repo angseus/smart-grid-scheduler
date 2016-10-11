@@ -98,13 +98,9 @@ class SmartMeter():
     Find hours between start and deadline (length of duration blocks) with the best price.
     """
     def find_hours(self, duration, deadline):
-        
-        # Get the cheapest value
-        cheapest_price = 1000.0 # Value just to make sure it will be lower
-        
         valid_hours = [] # This is a list with valid hours (used in order to check the upcoming day)
         hours = [] # This is a list of all the hours that have been chosen
-        start = self.current_hour
+        start = self.current_hour + 1 
         # Create a list with all valid hours
         while (start != deadline):
             valid_hours.append(start)
@@ -113,6 +109,7 @@ class SmartMeter():
             start = start % 24
 
         for i in range(0, duration):
+            cheapest_price = 1000.0
             # Pick out the hour with cheapest price and fulfill the requirements
             for k, v in self.pricelist.items():
                 if ((k not in hours) and (k in valid_hours)):
@@ -149,6 +146,9 @@ class SmartMeter():
                 #item for item in self.block_schedule if item[0] == id
 
         print("Node " + str(node_id) + " scheduled!")
+
+
+
 
     """
     Check if there is a scheduled task that should be started this block.
