@@ -42,8 +42,8 @@ class SmartMeter():
         self.current_power = 200 # start with an actual background load, just to make data more nice to plot
         self.threshold = 1000  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
-        self.clock = 0 #self.blocks_per_hour*16 # Start at 16 a clock
-        self.current_hour = 0 # Keeps track of the current hour of the day
+        self.current_hour = 12 # Keeps track of the current hour of the day
+        self.clock = self.blocks_per_hour * self.current_hour
         self.block_schedule = self.block_schedule = [[]] * (self.blocks_per_hour * 24) # Schedule for all blocks during 1 day
         
     ###########################################################################
@@ -59,7 +59,10 @@ class SmartMeter():
     Update the pricelist every hour.
     """
     def update_pricelist(self, current_hour):
-        self.pricelist[current_hour-1] = self.next_pricelist[current_hour-1]
+        if current_hour == 0:
+            self.pricelist[23] = self.next_pricelist[23]    
+        else:
+            self.pricelist[current_hour-1] = self.next_pricelist[current_hour-1]
 
     """
     Calculate the total price if we would have started now instead of 
@@ -361,7 +364,8 @@ class SmartMeter():
         if (self.deadline_load):
 
             # Get all scheduled task next hour
-            next_step = self.block_schedule[self.clock+1]
+            total_clocks = self.blocks_per_hour * 24
+            next_step = self.block_schedule[self.clock+1 % total_clocks]
 
             for node in self.block_schedule[self.clock]:
                 if ((node['id'] in self.active_list) and (node not in next_step)):
@@ -552,6 +556,8 @@ class SmartMeter():
             print("Background load: " + str(self.background_load))
             print("Deadline load: " + str(self.deadline_load))
             print("Waiting list: " + str(self.waiting_list))
+            print("Clock: " + str(self.clock))
+            print("Hour: " + str(self.current_hour))
 
             # Wait here until next second
             while(self.current_second == int(time.strftime('%S', time.gmtime()))):
@@ -591,7 +597,6 @@ class SmartMeter():
                 time.sleep(0.4)
 
             # Increase time
-            print("Clock: " + str(self.clock))
             self.clock += 1
 
 
@@ -609,6 +614,7 @@ class SmartMeter():
 
             if (self.clock % (self.blocks_per_hour*24) == 0):
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
+                self.clock = 0 # Reset the clock since it is a new day
             
 if __name__ == "__main__":
     smart_meter = SmartMeter()
