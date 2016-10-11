@@ -47,11 +47,9 @@ class SmartMeter():
         self.threshold = 1000  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.clock = 0 #self.blocks_per_hour*16 # Start at 16 a clock
-        
-        # TODO: Is there a better way than initialize this list?
-        # length of all blocks for the following 24 hours, keep track of scheduled power consumption every block
-        self.block_schedule = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]] 
         self.current_hour = 0 # Keeps track of the current hour of the day
+        self.block_schedule = self.block_schedule = [[]] * (self.blocks_per_hour * 24) # Schedule for all blocks during 1 day
+        
     
     def update_price(self):
         return download_price.downloadPrice("elspot_prices.xls")
