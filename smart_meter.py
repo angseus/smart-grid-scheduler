@@ -77,6 +77,8 @@ class SmartMeter():
         # Calculate total price from current hour and so many hours the device need to run
         while (index != stop):
             total_price += (self.pricelist[index] * power) 
+            index += 1
+            index = index % 24
 
         return total_price
 
@@ -147,7 +149,7 @@ class SmartMeter():
 
         print("Node " + str(node_id) + " scheduled!")
 
-
+        print("Total price if scheduled now: " + str(self.calculate_worstcase_price(duration, power)))
 
 
     """
