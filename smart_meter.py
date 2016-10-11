@@ -540,7 +540,18 @@ class SmartMeter():
     # Main                                                                    #
     ###########################################################################
     def main(self):
+
+        # Plotting
+        plt.ion()
+        plt.axis([0, 144, 0, 5000])
+        plt.ylabel("Power consumption")
+        plt.xlabel("Time")
+        plt.pause(0.05)
+
         while True:
+            plt.pause(0.05)
+            plt.plot(self.clock, self.current_power, zorder=2)
+            plt.scatter(self.clock, self.current_power, zorder=1)
             print("======== New block ========")
             print("Current power: " + str(self.current_power))
             print("Active list: " + str(self.active_list))
