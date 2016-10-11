@@ -44,7 +44,9 @@ class SmartMeter():
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.current_hour = 12 # Keeps track of the current hour of the day
         self.clock = self.blocks_per_hour * self.current_hour
-        self.block_schedule = self.block_schedule = [[]] * (self.blocks_per_hour * 24) # Schedule for all blocks during 1 day
+        self.block_schedule = [[] for _ in range(self.blocks_per_hour * 24)]
+        self.worst_case_price = 0
+        self.scheduled_price = 0
         
     ###########################################################################
     # Price functions                                                         #
@@ -161,15 +163,15 @@ class SmartMeter():
             for i in range(index, (index + self.blocks_per_hour)):
                 # Add id and power to that index in the list, id to be able to 
                 # call it later when it should be activated
-
                 self.block_schedule[i].append(({'id' : node_id, 'power': power}))
-                #item for item in self.block_schedule if item[0] == id
 
         print("Node " + str(node_id) + " scheduled!")
 
+        # Add price calculation to the total for this day.
+        self.worst_case_price += self.calculate_worstcase_price(duration, power)
+        self.scheduled_price  += self.calculate_price(hours, power)
         print("Total price if scheduled now: " + str(self.calculate_worstcase_price(duration, power)))
         print("Total price when scheduled now: " + str(self.calculate_price(hours, power)))
-
 
     """
     Check if there is a scheduled task that should be started this block.
@@ -178,7 +180,8 @@ class SmartMeter():
         # Get which block in the schedule list we should look at
         # Go through all tasks in the block schedule and see if some of them not is 
         # active, then we know it should be started now
-        for node in self.block_schedule[self.clock]:
+        total_clocks = self.blocks_per_hour * 24
+        for node in self.block_schedule[((self.clock + 1) % total_clocks)]:
             
             # v could looks like [{1:300}, {2:500}]  should check if id:s is in active list already
             if node['id'] not in self.active_list:
@@ -365,7 +368,7 @@ class SmartMeter():
 
             # Get all scheduled task next hour
             total_clocks = self.blocks_per_hour * 24
-            next_step = self.block_schedule[self.clock+1 % total_clocks]
+            next_step = self.block_schedule[((self.clock + 1) % total_clocks)]
 
             for node in self.block_schedule[self.clock]:
                 if ((node['id'] in self.active_list) and (node not in next_step)):
@@ -538,18 +541,6 @@ class SmartMeter():
     ###########################################################################
     def main(self):
         while True:
-            # Always decrease time when we executed one turn in the loop
-            self.decrease_time()
-
-            # Fetch current second
-            self.current_second = int(time.strftime('%S', time.gmtime()))
-
-            # The scheduler for the background loads
-            self.schedule_background((self.clock%self.blocks_per_hour))
-
-            # The scheduler for already scheduled tasks, check if some should be turned on
-            self.check_scheduled_tasks()
-
             print("======== New block ========")
             print("Current power: " + str(self.current_power))
             print("Active list: " + str(self.active_list))
@@ -558,6 +549,18 @@ class SmartMeter():
             print("Waiting list: " + str(self.waiting_list))
             print("Clock: " + str(self.clock))
             print("Hour: " + str(self.current_hour))
+
+            # The scheduler for already scheduled tasks, check if some should be turned on
+            self.check_scheduled_tasks()
+
+            # Always decrease time when we executed one turn in the loop
+            self.decrease_time()
+
+            # Fetch current second
+            self.current_second = int(time.strftime('%S', time.gmtime()))
+
+            # The scheduler for the background loads
+            self.schedule_background((self.clock%self.blocks_per_hour))
 
             # Wait here until next second
             while(self.current_second == int(time.strftime('%S', time.gmtime()))):
@@ -615,6 +618,8 @@ class SmartMeter():
             if (self.clock % (self.blocks_per_hour*24) == 0):
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
                 self.clock = 0 # Reset the clock since it is a new day
+                print("Today you saved: " + str(self.worst_case_price - self.scheduled_price) + " kr")
+                self.worst_case_price = self.scheduled_price = 0
             
 if __name__ == "__main__":
     smart_meter = SmartMeter()
