@@ -42,7 +42,7 @@ class SmartMeter():
         self.deadline_load = {} # Dict with all active deadline tasks
         self.current_power = 0 # We start on 0 Watts
         self.deadline_power = 0 # We start on 0 Watts
-        self.threshold = 1750  # maximum allowed power
+        self.threshold = 1200  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.current_hour = 12 # Keeps track of the current hour of the day
         self.clock = self.blocks_per_hour * self.current_hour
@@ -285,7 +285,7 @@ class SmartMeter():
             
             wait_lenght = len(self.waiting_list) # Number of waiting items
             tries = 0
-            temp_waitlist = self.waiting_list
+            temp_waitlist = self.waiting_list.copy()
             while ((self.current_power < self.threshold) and self.waiting_list):
                 # find the background node that should be turned off
                 node_id, node_details = self.find_least_slack(temp_waitlist)
@@ -302,6 +302,7 @@ class SmartMeter():
                     # Add it to the active list and remove it from waiting list
                     self.active_list[node_id] = {'id': node_id}
                     self.waiting_list.pop(node_id)
+                    temp_waitlist.pop(node_id)
 
                     # Add it to background loads to be able to see active backgrounds
                     self.background_load[node_id] = node_details
@@ -660,6 +661,9 @@ class SmartMeter():
                 self.current_hour += 1
                 self.current_hour = self.current_hour % 24
 
+                if (self.current_hour == 11):
+                    break
+
                 # Reset function that reset the internal time for all background devices every 6th block (seconds)
                 self.reset_backgrounds()
 
@@ -671,6 +675,7 @@ class SmartMeter():
                 self.clock = 0 # Reset the clock since it is a new day
                 print("Today you saved: " + str(self.worst_case_price - self.scheduled_price) + " kr")
                 self.worst_case_price = self.scheduled_price = 0
+        time.sleep(30)
 
 if __name__ == "__main__":
     # Check command line arguments
