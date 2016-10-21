@@ -39,7 +39,8 @@ class SmartMeter():
         self.background_list = {} # Dict with all known background devices(active and inactive)
         self.background_load = {} # Dict with all active background devices
         self.deadline_load = {} # Dict with all active deadline tasks
-        self.current_power = 200 # start with an actual background load, just to make data more nice to plot
+        self.current_power = 0 # We start on 0 Watts
+        self.deadline_power = 0 # We start on 0 Watts
         self.threshold = 1000  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.current_hour = 12 # Keeps track of the current hour of the day
@@ -195,7 +196,7 @@ class SmartMeter():
                 self.deadline_load[node['id']] = {'id': node['id']}
 
                 # add power to current_power as well
-                self.current_power += node['power']
+                self.deadline_power += node['power']
 
     ###########################################################################
     # Background / Interactive Scheduling                                     #
@@ -376,7 +377,7 @@ class SmartMeter():
                     payload = json.dumps({'action':'disconnect'}).encode('utf-8')
                     self.sockets[node['id']].send(payload)
                     
-                    self.current_power -= self.node_list[node['id']]['power']
+                    self.deadline_power -= self.node_list[node['id']]['power']
                     self.active_list.pop(node['id'])
                     self.deadline_load.pop(node['id'])
 
@@ -554,6 +555,7 @@ class SmartMeter():
             plt.scatter(self.clock, self.current_power, zorder=1)
             print("======== New block ========")
             print("Current power: " + str(self.current_power))
+            print("Deadline power: " + str (self.deadline_power))
             print("Active list: " + str(self.active_list))
             print("Background load: " + str(self.background_load))
             print("Deadline load: " + str(self.deadline_load))
