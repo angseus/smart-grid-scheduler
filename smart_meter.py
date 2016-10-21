@@ -16,6 +16,7 @@ import threading
 import time
 import select
 import matplotlib.pyplot as plt
+import sys
 
 class SmartMeter():
     def __init__(self):
@@ -540,19 +541,46 @@ class SmartMeter():
     ###########################################################################
     # Main                                                                    #
     ###########################################################################
-    def main(self):
+    def main(self, plot):
 
-        # Plotting
-        plt.ion()
-        plt.axis([0, 144, 0, 5000])
-        plt.ylabel("Power consumption")
-        plt.xlabel("Time")
-        plt.pause(0.05)
+        # Set up the graph
+        if (plot):
+            plt.ion()
+            self.figure, self.axis = plt.subplots()
+            self.lines, = self.axis.plot([],[], 'r-', label="Watt")
+            self.axis.set_autoscaley_on(True)
+            self.axis.set_xlim(0, 144)
+            self.axis.set_ylim(0, 5000)
+            self.axis.set_xlabel('Blocks')
+            self.axis.set_ylabel('Watt')
+            self.axis.grid()
+            plt.legend()
+
+        # Lists in order to keep track of usage different hours
+        block_usage = []
+        blocks = []
 
         while True:
-            plt.pause(0.05)
-            plt.plot(self.clock, self.current_power, zorder=2)
-            plt.scatter(self.clock, self.current_power, zorder=1)
+
+            if (plot):
+                if self.current_hour >= 0 and self.current_hour < 12:
+                    blocks.append(self.clock + 72)
+                else:
+                    blocks.append(self.clock - 72)
+
+                block_usage.append(self.current_power + self.deadline_power)
+
+                plt.pause(0.05)
+                #plt.plot(blocks, block_usage, zorder=1)
+                self.lines.set_xdata(blocks)
+                self.lines.set_ydata(block_usage)
+                self.axis.relim()
+                self.axis.autoscale_view()
+                self.figure.canvas.draw()
+                self.figure.canvas.flush_events()
+
+
+            # Print useful debugging information
             print("======== New block ========")
             print("Current power: " + str(self.current_power))
             print("Deadline power: " + str (self.deadline_power))
@@ -633,7 +661,15 @@ class SmartMeter():
                 self.clock = 0 # Reset the clock since it is a new day
                 print("Today you saved: " + str(self.worst_case_price - self.scheduled_price) + " kr")
                 self.worst_case_price = self.scheduled_price = 0
-            
+
 if __name__ == "__main__":
+    # Check command line arguments
+    if len(sys.argv) > 1:
+        if ((str(sys.argv[1])) == "plot"):
+            plot = True
+        else:
+            plot = False
+    else:
+        plot = False
     smart_meter = SmartMeter()
-    smart_meter.main()
+    smart_meter.main(plot)
