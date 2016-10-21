@@ -42,7 +42,7 @@ class SmartMeter():
         self.deadline_load = {} # Dict with all active deadline tasks
         self.current_power = 0 # We start on 0 Watts
         self.deadline_power = 0 # We start on 0 Watts
-        self.threshold = 1000  # maximum allowed power
+        self.threshold = 1750  # maximum allowed power
         self.blocks_per_hour = 6 # Set how many blocks there is per hour
         self.current_hour = 12 # Keeps track of the current hour of the day
         self.clock = self.blocks_per_hour * self.current_hour
@@ -259,7 +259,7 @@ class SmartMeter():
 
         # Check if there are any loads that have to be turned on this round
         if (self.waiting_list):
-            time_left = self.blocks_per_hour - clock
+            time_left = self.blocks_per_hour - clock - 1
             for k, v in self.waiting_list.items():
                 if (v['time'] == time_left):
                     print("Turn on emergency background for node: " + str(k))
@@ -282,25 +282,35 @@ class SmartMeter():
             # Remove all loads that are started 
             for k in activate_list:
                 self.waiting_list.pop(k)
-
+            
+            wait_lenght = len(self.waiting_list) # Number of waiting items
+            tries = 0
+            temp_waitlist = self.waiting_list
             while ((self.current_power < self.threshold) and self.waiting_list):
                 # find the background node that should be turned off
-                node_id, node_details = self.find_least_slack(self.waiting_list)
-                print("Should turn on " + str(node_id))
+                node_id, node_details = self.find_least_slack(temp_waitlist)
+                print("Want to turn on " + str(node_id))
+                if((self.current_power + node_details['power']) < self.threshold): 
+                    print("Turn on " + str(node_id))
+                    # Send activate msg to the background node
+                    payload = json.dumps({'action':'approved'}).encode('utf-8')
+                    self.sockets[node_id].send(payload)
                 
-                # Send activate msg to the background node
-                payload = json.dumps({'action':'approved'}).encode('utf-8')
-                self.sockets[node_id].send(payload)
-                
-                # Update current power
-                self.current_power += node_details['power']
+                    # Update current power
+                    self.current_power += node_details['power']
 
-                # Add it to the active list and remove it from waiting list
-                self.active_list[node_id] = {'id': node_id}
-                self.waiting_list.pop(node_id)
+                    # Add it to the active list and remove it from waiting list
+                    self.active_list[node_id] = {'id': node_id}
+                    self.waiting_list.pop(node_id)
 
-                # Add it to background loads to be able to see active backgrounds
-                self.background_load[node_id] = node_details
+                    # Add it to background loads to be able to see active backgrounds
+                    self.background_load[node_id] = node_details
+                else:
+                    temp_waitlist.pop(node_id)
+
+                tries += 1
+                if (tries == wait_lenght):
+                    break
             else:
                 print("Uses to much power to enable background")
     
@@ -578,7 +588,7 @@ class SmartMeter():
                 self.axis.autoscale_view()
                 self.figure.canvas.draw()
                 self.figure.canvas.flush_events()
-
+            
 
             # Print useful debugging information
             print("======== New block ========")
@@ -638,7 +648,7 @@ class SmartMeter():
                         self.handle_action(data)
                     else:
                         continue
-                time.sleep(0.4)
+                time.sleep(0.2)
 
             # Increase time
             self.clock += 1
