@@ -30,7 +30,7 @@ import time
 HOST, PORT = 'localhost', 9000
 
 class Node(Thread):
-    def __init__(self, id, power, time, flexible, category, priority, group_id, deadline, activity):
+    def __init__(self, id, power, time, deadline, activity):
         # Set up threading
         Thread.__init__(self)
         self.daemon = True
@@ -42,16 +42,11 @@ class Node(Thread):
         self.id = id
         self.power = power
         self.time = time
-        self.flexible = flexible
-        self.category = category
-        self.priority = priority
         self.deadline = deadline
-        self.group_id = group_id
         self.activity = activity
         self.block_per_hour = 6
 
-        self.data = {'id':self.id, 'details':{'power':power, 'time':time, 'flexible':flexible,
-            'category':category, 'priority':priority, 'group_id':group_id, 'deadline':deadline}}
+        self.data = {'id':self.id, 'details':{'power':power, 'time':time, 'flexible':flexible, 'deadline':deadline}}
 
         payload = {'action': 'register', 'payload':self.data}
 
@@ -179,23 +174,35 @@ class Node(Thread):
         print("Node Done")
 
 if __name__ == '__main__':
-    # id, power, time, flexible, category, priority, group_id, deadline, activity
+    # id, power, time, flexible, deadline, activity
     # Array that tell the node when and how long to request power
-    activity0 = [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
-    activity1 = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-    activity2 = [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-    activity3 = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,2,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
-    activity4 = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
-    activity5 = [0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,2,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0]
+    activity0 = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     
     # Create the nodes, time should always be based on 6 (one hour)
-    # id, power, time,      flexible, category, priority, group_id, deadline, activity
-    node0 = Node(0, 600, 0, 0, 1, 0, 1, 0, activity0) # TV
-    node1 = Node(1, 120, 2, 2, 1, 0, 1, 17, activity1) # Computer
-    node2 = Node(2, 100, 4, 2, 1, 0, 1, 23, activity2) # Derp
-    node3 = Node(3, 400, 2, 1, 1, 0, 1, 0, activity3) # TV
-    node4 = Node(4, 600, 1, 1, 1, 0, 1, 0, activity4) # TV
-    node5 = Node(5, 150, 0, 0, 1, 0, 1, 0, activity5) # TV
+    # id, power, time, flexible, deadline, activity
+
+    # Interactive loads
+    node0 = Node(0, 150, 0, 0, 0, activity0) # Livingroom TV
+    node1 = Node(1, 90, 0, 0, 0, activity1) # Bedroom TV
+    node2 = Node(2, 40, 0, 0, 0, activity2) # Lights1
+    node3 = Node(3, 20, 0, 0, 0, activity3) # Lights2
+    node4 = Node(4, 400, 0, 0, 0, activity4) # Stove
+    node5 = Node(5, 400, 0, 0, 0, activity5) # Oven
+    node6 = Node(6, 600, 0, 0, 0, activity6) # Iron
+    node7 = Node(7, 150, 0, 0, 0, activity7) # Outdoor lights
+    node8 = Node(8, 300, 0, 0, 0, activity8) # Computer
+    node9 = Node(9, 1000, 0, 0, 0, activity9) # Water Boiler
+    node10 = Node(10, 900, 0, 0, 0, activity10) # Hair dryer
+
+    # Background loads
+    node11 = Node(11, 600, 1, 1, 0, activity11) # AC
+    node12 = Node(12, 600, 2, 1, 0, activity12) # Water Heater
+    node13 = Node(13, 130, 2, 1, 0, activity13) # Refrigerator
+
+    # Deadline loads
+    node14 = Node(14, 3500, 0, 2, 8, activity14) # Electric Car
+    node15 = Node(15, 850, 0, 2, 23, activity15) # Laundry Machine
+    node16 = Node(16, 850, 0, 2, 7, activity16) # Dish Washer
     
     
     while True:
