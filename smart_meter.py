@@ -287,7 +287,7 @@ class SmartMeter():
             tries = 0
             temp_waitlist = self.waiting_list.copy()
             while ((self.current_power < self.threshold) and self.waiting_list):
-                # find the background node that should be turned off
+                # find the background node that should be turned on
                 node_id, node_details = self.find_least_slack(temp_waitlist)
                 print("Want to turn on " + str(node_id))
                 if((self.current_power + node_details['power']) < self.threshold): 
@@ -443,17 +443,24 @@ class SmartMeter():
             
             self.sockets[id].send(payload)
 
-            # TODO, check so we don't disconnect any emergency load that has to run
-
             # If interactive load exceed the limit, turn off background load
             if self.current_power > self.threshold:
-                # Until we have a current power below threshold, continue
-                while (self.current_power > self.threshold):
+                # Until we have a current power below threshold, continue, worst case is 
+                # when we have emergency loads, then we will break anyway
+                tmp_backgroundload = self.background_load.copy()
+                while ((self.current_power > self.threshold) and tmp_backgroundload):
                     # find the background node that should be turned off
-                    node_id, node_details = self.find_least_slack(self.background_load)
+                    node_id, node_details = self.find_least_slack(tmp_backgroundload)
+
                     # Check that there arent any background loads to disconnect
                     if (not node_id):
                         break
+
+                    # If the time left is the same time as the node require, don't pause it
+                    time_left = self.blocks_per_hour - (self.clock % 6) - 1
+                    if (node_details['time'] == time_left):
+                        tmp_backgroundload.pop(node_id)
+                        continue
                     
                     # Send disconnect msg to the background node
                     payload = json.dumps({'action':'disconnect'}).encode('utf-8')
@@ -461,13 +468,14 @@ class SmartMeter():
 
                     # Remove it from the active list
                     self.active_list.pop(node_id)
+                    self.background_load.pop(node_id)
+                    tmp_backgroundload.pop(node_id)
                     
                     # Add the device back to the waiting list
                     self.waiting_list[node_id] = node_details
 
                     # Decrease the power
                     self.current_power -= self.node_list[node_id]['power']
-                    self.background_load.pop(node_id)
 
         # Deadline task
         elif (details['flexible'] == 2):
@@ -661,7 +669,8 @@ class SmartMeter():
                 self.current_hour += 1
                 self.current_hour = self.current_hour % 24
 
-                if (self.current_hour == 11):
+                # Turn off the algorithm after 24 hours
+                if (self.clock == 71):
                     break
 
                 # Reset function that reset the internal time for all background devices every 6th block (seconds)
