@@ -1,8 +1,8 @@
 Time	Task
 12		All Backgrounds(AC, Water heater, refrigerator)
-1250	Parent turn on stove 30 min, and lights 60min
-1445	Children come home, turn on livingroom TV 45min and lights
-16		One Parent home, ironing 20min, turn on laundry machine(deadline 23),lights(6h)
+1250	Parent turn on stove 30 min, and lightsS 60min
+1445	Children come home, turn on livingroom TV 45min and lightsS
+16		One Parent home, ironing 20min, turn on laundry machine(deadline 23),lightsB(6h)
 17		Other Parent come home, connect electric car (deadline 08)
 1745	Start cooking, stove and oven turns on (30 min)
 1830	Outdoor lights turns on(5h)
@@ -12,3 +12,8 @@ Time	Task
 2000	Turn on water boiler(10 min)
 2115	Hair dryer(10min)
 2200	Turn on bedroom TV(30min)
+
+0630	Turn on Water Boiler(10min)
+0630	Turn on lightsS(1h)
+0645	Turn on Stove(20min)
+0710	Turn on Hair dryer(20min)
