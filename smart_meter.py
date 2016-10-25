@@ -670,7 +670,14 @@ class SmartMeter():
                 self.current_hour = self.current_hour % 24
 
                 # Turn off the algorithm after 24 hours
-                if (self.clock == 71):
+                if (self.current_hour == 12):
+                    print("################################# Simulation Done #################################")
+                    print("You saved: " + str(self.worst_case_price - self.scheduled_price) + " kr")
+                    print("Price if no scheduling: " + str(self.worst_case_price) + " kr")
+                    print("Price with scheduling: " + str(self.scheduled_price) + " kr")
+                    self.worst_case_price = self.scheduled_price = 0
+                    print("Blocks: ", blocks)
+                    print("Block consumption: ", block_usage)
                     break
 
                 # Reset function that reset the internal time for all background devices every 6th block (seconds)
@@ -682,8 +689,6 @@ class SmartMeter():
             if (self.clock % (self.blocks_per_hour*24) == 0):
                 print("!!!!!!!!!!!!!!!!!! New day! !!!!!!!!!!!!!!!!!!")
                 self.clock = 0 # Reset the clock since it is a new day
-                print("Today you saved: " + str(self.worst_case_price - self.scheduled_price) + " kr")
-                self.worst_case_price = self.scheduled_price = 0
         time.sleep(30)
 
 if __name__ == "__main__":
